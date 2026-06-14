@@ -1,0 +1,6 @@
+{
+  "name": "Solo Leveling Fitness",
+  "description": "An experience-based gym and workout tracker styled as the Solo Leveling anime system. Complete daily quests, level up stats, earn badges, track body measurements, and climb the leaderboard.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

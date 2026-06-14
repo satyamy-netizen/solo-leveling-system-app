@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Horns and ominous physical base shadow -->
+    <path
+        android:fillColor="#0C0D12"
+        android:pathData="M 32,22 L 44,44 L 28,45 Z" />
+    <path
+        android:fillColor="#0C0D12"
+        android:pathData="M 76,22 L 64,44 L 80,45 Z" />
+
+    <!-- Demon Crown / Spike Head Outline -->
+    <path
+        android:fillColor="#151722"
+        android:strokeColor="#FF0055"
+        android:strokeWidth="1.5"
+        android:pathData="M 28,45 L 38,40 L 44,44 L 54,32 L 64,44 L 70,40 L 80,45 L 75,75 L 54,88 L 33,75 Z" />
+
+    <!-- Menacing Glowing Cyan forehead matrix -->
+    <path
+        android:fillColor="#00FFFF"
+        android:pathData="M 52,38 L 56,38 L 54,44 Z" />
+
+    <!-- Sharp glow red monstrous eyes -->
+    <!-- Left Eye -->
+    <path
+        android:fillColor="#FF0044"
+        android:strokeColor="#FF0000"
+        android:strokeWidth="0.8"
+        android:pathData="M 38,54 C 41,52 45,51 49,53 C 47,56 42,58 38,54 Z" />
+    <!-- Left Pupil Glow -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 43,53.5 L 45,53.5 L 44,55 Z" />
+
+    <!-- Right Eye -->
+    <path
+        android:fillColor="#FF0044"
+        android:strokeColor="#FF0000"
+        android:strokeWidth="0.8"
+        android:pathData="M 70,54 C 67,52 63,51 59,53 C 61,56 66,58 70,54 Z" />
+    <!-- Right Pupil Glow -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 65,53.5 L 63,53.5 L 64,55 Z" />
+
+    <!-- Horrifying sinister grinning mouth -->
+    <path
+        android:fillColor="#0D0005"
+        android:strokeColor="#FF0033"
+        android:strokeWidth="1.2"
+        android:pathData="M 37,64 Q 54,84 71,64 Q 54,72 37,64" />
+
+    <!-- Jagged sharp teeth -->
+    <!-- Upper teeth teeth -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 44,66 L 46,69 L 48,66" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 50,67 L 52,71 L 54,67" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 56,67 L 58,71 L 60,67" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 62,66 L 64,69 L 66,66" />
+
+    <!-- Lower teeth -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 47,71 L 49,68 L 51,71" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 53,73 L 54,69 L 55,73" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 57,71 L 59,68 L 61,71" />
+
+    <!-- Creep-glow chin scars -->
+    <path
+        android:strokeColor="#FF0055"
+        android:strokeWidth="1"
+        android:pathData="M 46,78 L 48,82 M 62,78 L 60,82" />
+
+</vector>
