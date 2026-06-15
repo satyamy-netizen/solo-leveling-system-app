@@ -54,6 +54,35 @@ class SystemViewModel(application: Application) : AndroidViewModel(application) 
     // --- Custom App Tray Name state ---
     val customAppTrayName = MutableStateFlow("Solo Leveling Fitness")
 
+    // --- Monthly Workout Goals State ---
+    val monthlyGoalSessions = MutableStateFlow(12)
+    val monthlyGoalVolume = MutableStateFlow(10000)
+
+    val monthlySessionsProgress = workoutLogs.map { logs ->
+        try {
+            val sdf = SimpleDateFormat("yyyy-MM", Locale.US)
+            val currentMonthStr = sdf.format(Date())
+            logs.filter { it.date.startsWith(currentMonthStr) }
+                .map { it.date }
+                .distinct()
+                .size
+        } catch (e: Exception) {
+            0
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    val monthlyVolumeProgress = workoutLogs.map { logs ->
+        try {
+            val sdf = SimpleDateFormat("yyyy-MM", Locale.US)
+            val currentMonthStr = sdf.format(Date())
+            logs.filter { it.date.startsWith(currentMonthStr) }
+                .sumOf { (it.weight * it.sets * it.reps).toDouble() }
+                .toFloat()
+        } catch (e: Exception) {
+            0f
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0f)
+
     // --- Active Screen Navigation State ---
     val currentScreen = MutableStateFlow("LOGIN") // "LOGIN", "CHALLENGE_SETUP", "DASHBOARD", "FOCUS_MANAGER", "WORKOUTS", "ANALYTICS", "LEADERBOARD", "OWNER"
     
@@ -77,6 +106,9 @@ class SystemViewModel(application: Application) : AndroidViewModel(application) 
     // Hevy-style workout completion card state
     val showWorkoutCompletionDialog = MutableStateFlow<Boolean>(false)
 
+    // Active Live Workout Tracker (Hevy style)
+    val activeWorkoutExercises = MutableStateFlow<List<ActiveWorkoutExercise>>(emptyList())
+
     // Full screen Solo Leveling Level Up alert trigger state
     val showLevelUpAnimation = MutableStateFlow<Int?>(null)
 
@@ -89,6 +121,8 @@ class SystemViewModel(application: Application) : AndroidViewModel(application) 
         try {
             val sharedPrefs = application.getSharedPreferences("solo_leveling_prefs", android.content.Context.MODE_PRIVATE)
             customAppTrayName.value = sharedPrefs.getString("custom_app_tray_name", "Solo Leveling Fitness") ?: "Solo Leveling Fitness"
+            monthlyGoalSessions.value = sharedPrefs.getInt("monthly_goal_sessions", 12)
+            monthlyGoalVolume.value = sharedPrefs.getInt("monthly_goal_volume", 10000)
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -888,6 +922,236 @@ class SystemViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    fun downloadLevelUpCard(context: android.content.Context, level: Int) {
+        try {
+            val profile = userProfile.value
+            val name = profile?.name ?: "Hunter"
+            val statsText = "STR: ${profile?.strength ?: 10} | AGI: ${profile?.agility ?: 10} | INT: ${profile?.intelligence ?: 10}"
+            val bitmap = com.example.util.WorkoutImageExporter.generateLevelUpCard(
+                username = name,
+                level = level,
+                statsText = statsText
+            )
+            val fileSaved = com.example.util.WorkoutImageExporter.saveBitmapToGallery(context, bitmap, "Level_Up_Ascension")
+            if (fileSaved != null || android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                notifyMsg("S-Rank Level-Up Card successfully saved to Gallery / Pictures directory!", "achievement")
+            } else {
+                notifyMsg("Error saving Level-Up card image to storage.", "warning")
+            }
+        } catch (e: Exception) {
+            notifyMsg("Level Up Card generation failed: ${e.message}", "warning")
+        }
+    }
+
+    fun shareLevelUpCard(context: android.content.Context, level: Int) {
+        try {
+            val profile = userProfile.value
+            val statsText = "STR: ${profile?.strength ?: 10} | AGI: ${profile?.agility ?: 10} | INT: ${profile?.intelligence ?: 10}"
+            val textShare = "⚡ SHADOW MONARCH RE-AWAKEN: ASCENDED TO LEVEL $level! ⚡\nMy current status: $statsText\nDownload the app to register your coordinates!"
+            
+            val sendIntent = android.content.Intent().apply {
+                action = android.content.Intent.ACTION_SEND
+                putExtra(android.content.Intent.EXTRA_TEXT, textShare)
+                type = "text/plain"
+            }
+            val shareIntent = android.content.Intent.createChooser(sendIntent, "SHARE ASCENSION DECREE")
+            shareIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(shareIntent)
+            
+            notifyMsg("Ascension share intent dispatched successfully!", "achievement")
+        } catch (e: Exception) {
+            notifyMsg("Ascension share failed: ${e.message}", "warning")
+        }
+    }
+
+    suspend fun evaluateExerciseIntensityWithAi(
+        exerciseName: String,
+        sets: Int,
+        reps: Int,
+        weight: Float,
+        barWeight: Float
+    ): String {
+        val apiKey = com.example.BuildConfig.GEMINI_API_KEY
+        if (apiKey.isBlank() || apiKey == "YOUR_GEMINI_API_KEY") {
+            // Offline/Invalid key Fallback: Local deterministic AI simulator
+            val index = sets * reps * (weight + barWeight)
+            return when {
+                index < 250f -> "Low"
+                index > 1000f -> "High"
+                else -> "Medium"
+            }
+        }
+        
+        return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                val client = okhttp3.OkHttpClient.Builder()
+                    .connectTimeout(8, java.util.concurrent.TimeUnit.SECONDS)
+                    .readTimeout(8, java.util.concurrent.TimeUnit.SECONDS)
+                    .build()
+                
+                val prompt = """
+                    Determine strength training exercise intensity strictly based on:
+                    Exercise: $exerciseName
+                    Sets: $sets
+                    Reps: $reps
+                    Weight Added: $weight kg
+                    Barbell Weight: $barWeight kg
+                    
+                    Respond with EXACTLY one of these three uppercase words: LOW, MEDIUM, or HIGH.
+                    Do not include any explanation or punctuation. Output only a single word.
+                """.trimIndent()
+                
+                val requestJson = org.json.JSONObject().apply {
+                    put("contents", org.json.JSONArray().apply {
+                        put(org.json.JSONObject().apply {
+                            put("parts", org.json.JSONArray().apply {
+                                put(org.json.JSONObject().apply {
+                                    put("text", prompt)
+                                })
+                            })
+                        })
+                    })
+                }
+                
+                val mediaType = "application/json; charset=utf-8".toMediaType()
+                val requestBody = requestJson.toString().toRequestBody(mediaType)
+                
+                // Using low-latency model gemini-1.5-flash
+                val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$apiKey"
+                
+                val request = okhttp3.Request.Builder()
+                    .url(url)
+                    .post(requestBody)
+                    .build()
+                
+                client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) throw Exception("HTTP ${response.code}")
+                    val body = response.body?.string() ?: throw Exception("Empty")
+                    val jsonRoot = org.json.JSONObject(body)
+                    val cand = jsonRoot.getJSONArray("candidates").getJSONObject(0)
+                    val text = cand.getJSONObject("content").getJSONArray("parts").getJSONObject(0).getString("text").trim()
+                    
+                    val cleanVal = text.uppercase()
+                    when {
+                        cleanVal.contains("LOW") -> "Low"
+                        cleanVal.contains("HIGH") -> "High"
+                        else -> "Medium"
+                    }
+                }
+            } catch (e: Exception) {
+                val index = sets * reps * (weight + barWeight)
+                when {
+                    index < 250f -> "Low"
+                    index > 1000f -> "High"
+                    else -> "Medium"
+                }
+            }
+        }
+    }
+
+    fun initializeActiveWorkoutIfEmpty(suggested: List<PreloadedExercise>) {
+        if (activeWorkoutExercises.value.isEmpty()) {
+            activeWorkoutExercises.value = suggested.map { ex ->
+                ActiveWorkoutExercise(
+                    name = ex.name,
+                    category = ex.category,
+                    sets = ex.baseSets,
+                    reps = ex.baseReps.replace(Regex("[^0-9]"), "").toIntOrNull() ?: 10,
+                    weight = 15f,
+                    barWeight = 20f,
+                    isDone = false,
+                    setsList = List(ex.baseSets) { idx ->
+                        ActiveWorkoutSet(id = idx + 1, reps = ex.baseReps.replace(Regex("[^0-9]"), ""), weight = "15")
+                    }
+                )
+            }
+        }
+    }
+
+    fun addExerciseToActiveWorkout(ex: PreloadedExercise, customSets: Int = 3, customReps: String = "10", customWeight: Float = 15f) {
+        val repsInt = customReps.replace(Regex("[^0-9]"), "").toIntOrNull() ?: 10
+        val newExercise = ActiveWorkoutExercise(
+            name = ex.name,
+            category = ex.category,
+            sets = customSets,
+            reps = repsInt,
+            weight = customWeight,
+            barWeight = 20f,
+            isDone = false,
+            setsList = List(customSets) { idx ->
+                ActiveWorkoutSet(id = idx + 1, reps = customReps, weight = customWeight.toString())
+            }
+        )
+        activeWorkoutExercises.value = activeWorkoutExercises.value + newExercise
+        notifyMsg("Added ${ex.name} to Live Workout Session queue!", "neutral")
+    }
+
+    fun updateActiveExerciseSetsList(exerciseId: String, newSetsList: List<ActiveWorkoutSet>) {
+        activeWorkoutExercises.value = activeWorkoutExercises.value.map {
+            if (it.id == exerciseId) {
+                it.copy(setsList = newSetsList, sets = newSetsList.size)
+            } else {
+                it
+            }
+        }
+    }
+
+    fun updateActiveExerciseBarWeight(exerciseId: String, newBarWeight: Float) {
+        activeWorkoutExercises.value = activeWorkoutExercises.value.map {
+            if (it.id == exerciseId) {
+                it.copy(barWeight = newBarWeight)
+            } else {
+                it
+            }
+        }
+    }
+
+    fun completeActiveExercise(exerciseId: String, context: android.content.Context) {
+        val exercise = activeWorkoutExercises.value.find { it.id == exerciseId } ?: return
+        
+        viewModelScope.launch {
+            notifyMsg("AI is calculating performance intensity...", "neutral")
+            
+            val decidedIntensity = evaluateExerciseIntensityWithAi(
+                exerciseName = exercise.name,
+                sets = exercise.sets,
+                reps = exercise.reps,
+                weight = exercise.setsList.firstOrNull()?.weight?.toFloatOrNull() ?: exercise.weight,
+                barWeight = exercise.barWeight
+            )
+            
+            val avgWeight = exercise.setsList.mapWithIndexMaybe { it.weight.toFloatOrNull() }.filterNotNull().average().toFloat().takeIf { !it.isNaN() } ?: exercise.weight
+            val avgReps = exercise.setsList.mapWithIndexMaybe { it.reps.toIntOrNull() }.filterNotNull().average().toInt().takeIf { it > 0 } ?: exercise.reps
+            
+            logWorkoutExercise(
+                name = exercise.name,
+                category = exercise.category,
+                weight = avgWeight,
+                sets = exercise.sets,
+                reps = avgReps,
+                barWeight = exercise.barWeight,
+                intensity = decidedIntensity
+            )
+            
+            activeWorkoutExercises.value = activeWorkoutExercises.value.map {
+                if (it.id == exerciseId) {
+                    it.copy(isDone = true, aiIntensity = decidedIntensity)
+                } else {
+                    it
+                }
+            }
+        }
+    }
+
+    fun resetActiveWorkout() {
+        activeWorkoutExercises.value = emptyList()
+        notifyMsg("Re-initialized active workout queue.", "neutral")
+    }
+
+    private fun <T, R> List<T>.mapWithIndexMaybe(transform: (T) -> R): List<R> {
+        return this.map(transform)
+    }
+
     fun deleteWorkoutLog(id: Int) {
         viewModelScope.launch {
             repository.deleteWorkoutLog(id)
@@ -1129,7 +1393,7 @@ class SystemViewModel(application: Application) : AndroidViewModel(application) 
 
                     val mediaType = "application/json; charset=utf-8".toMediaType()
                     val requestBody = requestJson.toString().toRequestBody(mediaType)
-                    val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=$apiKey"
+                    val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$apiKey"
 
                     val request = okhttp3.Request.Builder()
                         .url(url)
@@ -1260,10 +1524,218 @@ class SystemViewModel(application: Application) : AndroidViewModel(application) 
         notifyMsg("App Tray label requested update: '$newName' saved inside system preferences!", "achievement")
     }
 
+    fun saveMonthlyGoals(sessions: Int, volume: Int) {
+        val sharedPrefs = getApplication<Application>().getSharedPreferences("solo_leveling_prefs", android.content.Context.MODE_PRIVATE)
+        sharedPrefs.edit()
+            .putInt("monthly_goal_sessions", sessions)
+            .putInt("monthly_goal_volume", volume)
+            .apply()
+        monthlyGoalSessions.value = sessions
+        monthlyGoalVolume.value = volume
+        notifyMsg("Target Special Goals updated perfectly! New training schedule initialized.", "achievement")
+    }
+
     val adminProcessing = MutableStateFlow(false)
     val adminResponseLog = MutableStateFlow<List<String>>(emptyList())
+    val adminChatMessages = MutableStateFlow<List<AdminChatMessage>>(listOf(
+        AdminChatMessage("system", "Welcome, Sovereign Satyam. I am the Solo Leveling System Architect Core. You may issue prompts, ask questions, or decree database modifications directly. I have full override privileges on user profiles, quests, and workout structures.")
+    ))
 
-    fun executeAdminPrompt(promptText: String) {
+    fun sendAdminChatMessage(promptText: String) {
+        if (promptText.isBlank()) return
+        val userMsg = AdminChatMessage("sovereign", promptText)
+        adminChatMessages.value = adminChatMessages.value + userMsg
+        adminProcessing.value = true
+
+        viewModelScope.launch {
+            val profile = repository.getUserProfileOneShot() ?: return@launch
+            val apiKey = com.example.BuildConfig.GEMINI_API_KEY
+            val isUsingSimulated = apiKey.isBlank() || apiKey == "MY_GEMINI_API_KEY"
+
+            var responseText = ""
+            if (isUsingSimulated) {
+                val cleanPrompt = promptText.lowercase().trim()
+                try {
+                    if (cleanPrompt.contains("level up") || cleanPrompt.contains("levelup")) {
+                        val numMatch = Regex("\\d+").find(cleanPrompt)
+                        val levelsToAdd = numMatch?.value?.toIntOrNull() ?: 1
+                        val nextProfile = profile.copy(level = profile.level + levelsToAdd)
+                        repository.insertOrUpdateProfile(nextProfile)
+                        responseText = "SUCCEEDED: Sovereign Satyam, adjusting the neural matrix. You have ascended to Level ${nextProfile.level}!"
+                    } else if (cleanPrompt.contains("add stats") || cleanPrompt.contains("stat points") || cleanPrompt.contains("stat")) {
+                        val numMatch = Regex("\\d+").find(cleanPrompt)
+                        val ptsToAdd = numMatch?.value?.toIntOrNull() ?: 10
+                        val nextProfile = profile.copy(statPoints = profile.statPoints + ptsToAdd)
+                        repository.insertOrUpdateProfile(nextProfile)
+                        responseText = "SUCCEEDED: Sovereign decree processed. +$ptsToAdd stat points have been injected into your current pool."
+                    } else if (cleanPrompt.contains("gold") || cleanPrompt.contains("money")) {
+                        val numMatch = Regex("\\d+").find(cleanPrompt)
+                        val goldToAdd = numMatch?.value?.toIntOrNull() ?: 500
+                        val nextProfile = profile.copy(gold = profile.gold + goldToAdd)
+                        repository.insertOrUpdateProfile(nextProfile)
+                        responseText = "SUCCEEDED: Injected +$goldToAdd golden mana crystals directly into your treasury!"
+                    } else if (cleanPrompt.contains("quest")) {
+                        val questName = if (cleanPrompt.contains("name")) {
+                            cleanPrompt.substringAfter("name").trim()
+                        } else "Sovereign Special Quest"
+                        val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+                        val today = sdf.format(java.util.Date())
+                        val quest = DailyQuestEntity(
+                            date = today,
+                            name = questName.uppercase(),
+                            targetCount = 100,
+                            currentCount = 0,
+                            isCompleted = false
+                        )
+                        repository.insertDailyQuest(quest)
+                        responseText = "SUCCEEDED: Created active quest: '$questName' (Target: 100) inside the global register."
+                    } else {
+                        val nextProfile = profile.copy(
+                            strength = profile.strength + 2,
+                            agility = profile.agility + 2,
+                            vitality = profile.vitality + 2
+                        )
+                        repository.insertOrUpdateProfile(nextProfile)
+                        responseText = "SYSTEM AUTOMATION: Instruction observed. Universal stats up by +2! Specify specific commands such as 'level up 10 times' or 'add 500 gold' to issue detailed overwrites."
+                    }
+                } catch (e: Exception) {
+                    responseText = "FAILED execution logic error: ${e.message}"
+                }
+                adminChatMessages.value = adminChatMessages.value + AdminChatMessage("system", responseText)
+                notifyMsg(responseText, "achievement")
+                adminProcessing.value = false
+            } else {
+                try {
+                    val client = okhttp3.OkHttpClient.Builder()
+                        .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+                        .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+                        .build()
+
+                    val historySerialized = adminChatMessages.value.takeLast(10).joinToString("\n") {
+                        "${it.sender.uppercase()}: ${it.text}"
+                    }
+
+                    val instructions = """
+                        You are the Solo Leveling System Architect Core, the omnipotent controller of user satyamyadav30042008@gmail.com's system database.
+                        The administrator (SOVEREIGN) wants to make changes to the app by writing prompts in this chat.
+                        Here is the previous conversation history:
+                        $historySerialized
+
+                        Latest prompt to execute: "$promptText"
+
+                        Analyze this prompt and calculate adjustments.
+                        You MUST reply with a JSON response that contains:
+                        1. "explanation": A narrative confirming the changes and roleplaying as the System Architect (e.g. "By your sovereign authority, Satyam, I have adjusted the physical attributes matrix. Your strength is now 80 and level 12!").
+                        2. "profileUpdates": Optional JSON object matching fields in UserProfileEntity: level:Int, xp:Int, strength:Int, agility:Int, vitality:Int, intelligence:Int, sense:Int, statPoints:Int, gold:Int, benchPress:Float, squat:Float, deadlift:Float, overheadPress:Float.
+                        3. "newQuest": Optional JSON object for a new quest: name:String, targetCount:Int.
+                        4. "newWorkoutLog": Optional JSON object for a workout log: exerciseName:String, category:String, weight:Float, sets:Int, reps:Int.
+                        Format your output STRICTLY as a clean JSON object containing only these optional fields. No additional text wrappers.
+                    """.trimIndent()
+
+                    val requestJson = org.json.JSONObject().apply {
+                        put("contents", org.json.JSONArray().apply {
+                            put(org.json.JSONObject().apply {
+                                put("parts", org.json.JSONArray().apply {
+                                    put(org.json.JSONObject().apply {
+                                        put("text", instructions)
+                                    })
+                                })
+                            })
+                        })
+                    }
+
+                    val mediaType = "application/json; charset=utf-8".toMediaType()
+                    val requestBody = requestJson.toString().toRequestBody(mediaType)
+                    val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$apiKey"
+
+                    val request = okhttp3.Request.Builder()
+                        .url(url)
+                        .post(requestBody)
+                        .build()
+
+                    val result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        client.newCall(request).execute().use { response ->
+                            if (!response.isSuccessful) throw Exception("HTTP ${response.code}")
+                            val body = response.body?.string() ?: throw Exception("Empty response body")
+                            val jsonRoot = org.json.JSONObject(body)
+                            val cand = jsonRoot.getJSONArray("candidates").getJSONObject(0)
+                            cand.getJSONObject("content").getJSONArray("parts").getJSONObject(0).getString("text")
+                        }
+                    }
+
+                    val cleanJsonStr = result.trim()
+                        .removePrefix("```json")
+                        .removePrefix("```")
+                        .removeSuffix("```")
+                        .trim()
+
+                    val jsonResult = org.json.JSONObject(cleanJsonStr)
+                    val explanation = jsonResult.optString("explanation", "Sovereign request executed.")
+                    
+                    if (jsonResult.has("profileUpdates")) {
+                        val pUp = jsonResult.getJSONObject("profileUpdates")
+                        var updatedProfile = repository.getUserProfileOneShot() ?: profile
+                        if (pUp.has("level")) updatedProfile = updatedProfile.copy(level = pUp.getInt("level"))
+                        if (pUp.has("xp")) updatedProfile = updatedProfile.copy(xp = pUp.getInt("xp"))
+                        if (pUp.has("strength")) updatedProfile = updatedProfile.copy(strength = pUp.getInt("strength"))
+                        if (pUp.has("agility")) updatedProfile = updatedProfile.copy(agility = pUp.getInt("agility"))
+                        if (pUp.has("vitality")) updatedProfile = updatedProfile.copy(vitality = pUp.getInt("vitality"))
+                        if (pUp.has("intelligence")) updatedProfile = updatedProfile.copy(intelligence = pUp.getInt("intelligence"))
+                        if (pUp.has("sense")) updatedProfile = updatedProfile.copy(sense = pUp.getInt("sense"))
+                        if (pUp.has("statPoints")) updatedProfile = updatedProfile.copy(statPoints = pUp.getInt("statPoints"))
+                        if (pUp.has("gold")) updatedProfile = updatedProfile.copy(gold = pUp.getInt("gold"))
+                        if (pUp.has("benchPress")) updatedProfile = updatedProfile.copy(benchPress = pUp.getDouble("benchPress").toFloat())
+                        if (pUp.has("squat")) updatedProfile = updatedProfile.copy(squat = pUp.getDouble("squat").toFloat())
+                        if (pUp.has("deadlift")) updatedProfile = updatedProfile.copy(deadlift = pUp.getDouble("deadlift").toFloat())
+                        if (pUp.has("overheadPress")) updatedProfile = updatedProfile.copy(overheadPress = pUp.getDouble("overheadPress").toFloat())
+                        repository.insertOrUpdateProfile(updatedProfile)
+                    }
+
+                    if (jsonResult.has("newQuest")) {
+                        val nQ = jsonResult.getJSONObject("newQuest")
+                        val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+                        val today = sdf.format(java.util.Date())
+                        val quest = DailyQuestEntity(
+                            date = today,
+                            name = nQ.optString("name", "Sovereign Mandate").uppercase(),
+                            targetCount = nQ.optInt("targetCount", 100),
+                            currentCount = 0,
+                            isCompleted = false
+                        )
+                        repository.insertDailyQuest(quest)
+                    }
+
+                    if (jsonResult.has("newWorkoutLog")) {
+                        val nW = jsonResult.getJSONObject("newWorkoutLog")
+                        val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+                        val today = sdf.format(java.util.Date())
+                        val log = WorkoutLogEntity(
+                            date = today,
+                            exerciseName = nW.optString("exerciseName", "Architect Authorized Lift"),
+                            category = nW.optString("category", "Full Body"),
+                            weight = nW.optDouble("weight", 60.0).toFloat(),
+                            sets = nW.optInt("sets", 3),
+                            reps = nW.optInt("reps", 10),
+                            xpEarned = 25
+                        )
+                        repository.insertWorkoutLog(log)
+                    }
+
+                    adminChatMessages.value = adminChatMessages.value + AdminChatMessage("system", explanation)
+                    notifyMsg(explanation, "achievement")
+                } catch (e: Exception) {
+                    val errMsg = "Error processing system edit: ${e.message}"
+                    adminChatMessages.value = adminChatMessages.value + AdminChatMessage("system", errMsg)
+                    notifyMsg(errMsg, "warning")
+                }
+                adminProcessing.value = false
+            }
+        }
+    }
+
+    fun executeAdminPrompt(promptText: String) {}
+
+    fun unused_executeAdminPrompt(promptText: String) {
         if (promptText.isBlank()) return
         viewModelScope.launch {
             adminProcessing.value = true
@@ -1356,7 +1828,7 @@ class SystemViewModel(application: Application) : AndroidViewModel(application) 
 
                     val mediaType = "application/json; charset=utf-8".toMediaType()
                     val requestBody = requestJson.toString().toRequestBody(mediaType)
-                    val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=$apiKey"
+                    val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$apiKey"
 
                     val request = okhttp3.Request.Builder()
                         .url(url)
@@ -1443,6 +1915,12 @@ class SystemViewModel(application: Application) : AndroidViewModel(application) 
     }
 }
 
+data class AdminChatMessage(
+    val sender: String, // "system" or "sovereign"
+    val text: String,
+    val timestamp: String = java.text.SimpleDateFormat("HH:mm", java.util.Locale.US).format(java.util.Date())
+)
+
 data class AiWorkoutExercise(
     val name: String,
     val sets: Int,
@@ -1450,4 +1928,23 @@ data class AiWorkoutExercise(
     val recommendedWeight: String,
     val description: String,
     val intensity: String
+)
+
+data class ActiveWorkoutSet(
+    val id: Int,
+    val reps: String,
+    val weight: String
+)
+
+data class ActiveWorkoutExercise(
+    val id: String = java.util.UUID.randomUUID().toString(),
+    val name: String,
+    val category: String,
+    val sets: Int,
+    val reps: Int,
+    val weight: Float,
+    val barWeight: Float,
+    val isDone: Boolean = false,
+    val setsList: List<ActiveWorkoutSet> = emptyList(),
+    val aiIntensity: String = "Medium"
 )

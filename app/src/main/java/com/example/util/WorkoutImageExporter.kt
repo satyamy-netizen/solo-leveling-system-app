@@ -319,4 +319,146 @@ object WorkoutImageExporter {
         }
         return file
     }
+
+    fun generateLevelUpCard(
+        username: String,
+        level: Int,
+        statsText: String
+    ): Bitmap {
+        val width = 1080
+        val height = 1350
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+
+        // Draw obsidian gradient background
+        val backgroundPaint = Paint().apply {
+            isAntiAlias = true
+            shader = LinearGradient(
+                0f, 0f, 0f, height.toFloat(),
+                Color.parseColor("#110a24"), // Deep cyber violet
+                Color.parseColor("#030209"), // Void black
+                Shader.TileMode.CLAMP
+            )
+        }
+        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), backgroundPaint)
+
+        // Draw decorative thin neon borders matching Solo Theme (Cyberpunk inspired)
+        val borderPaint = Paint().apply {
+            isAntiAlias = true
+            color = Color.parseColor("#fcee09") // Cyber yellow
+            style = Paint.Style.STROKE
+            strokeWidth = 14f
+        }
+        canvas.drawRoundRect(20f, 20f, width - 20f, height - 20f, 32f, 32f, borderPaint)
+
+        // Inner glowing secondary border
+        val innerBorderPaint = Paint().apply {
+            isAntiAlias = true
+            color = Color.parseColor("#00f0ff") // Cyber cyan
+            style = Paint.Style.STROKE
+            strokeWidth = 4f
+            alpha = 180
+        }
+        canvas.drawRoundRect(35f, 35f, width - 35f, height - 35f, 24f, 24f, innerBorderPaint)
+
+        // Paint for texts
+        val textPaint = Paint().apply {
+            isAntiAlias = true
+            typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
+        }
+
+        // Title
+        textPaint.color = Color.parseColor("#fcee09")
+        textPaint.textSize = 50f
+        textPaint.textAlign = Paint.Align.CENTER
+        canvas.drawText("⚡ SYSTEM ASCENSION DECREE ⚡", width / 2f, 150f, textPaint)
+
+        // Subtitle line
+        textPaint.color = Color.WHITE
+        textPaint.textSize = 28f
+        textPaint.typeface = Typeface.create(Typeface.MONOSPACE, Typeface.NORMAL)
+        canvas.drawText("S-RANK HUNTER SYSTEM EVOLUTION", width / 2f, 210f, textPaint)
+
+        // Horizontal partition line
+        val linePaint = Paint().apply {
+            color = Color.parseColor("#3b3b11") // Dim yellow/brown
+            strokeWidth = 4f
+        }
+        canvas.drawLine(100f, 250f, width - 100f, 250f, linePaint)
+
+        // Big level badge
+        val cardPaint = Paint().apply {
+            color = Color.parseColor("#05070c") // Void black card interior
+            style = Paint.Style.FILL
+        }
+        val cardBorderPaint = Paint().apply {
+            color = Color.parseColor("#fcee09")
+            style = Paint.Style.STROKE
+            strokeWidth = 3f
+        }
+
+        canvas.drawRoundRect(width / 2f - 200f, 320f, width / 2f + 200f, 520f, 16f, 16f, cardPaint)
+        canvas.drawRoundRect(width / 2f - 200f, 320f, width / 2f + 200f, 520f, 16f, 16f, cardBorderPaint)
+
+        // Draw level text
+        textPaint.color = Color.parseColor("#fcee09")
+        textPaint.textSize = 80f
+        textPaint.textAlign = Paint.Align.CENTER
+        textPaint.typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
+        canvas.drawText("LEVEL $level", width / 2f, 440f, textPaint)
+
+        // Congratulations box
+        canvas.drawRoundRect(100f, 580f, width - 100f, 960f, 16f, 16f, cardPaint)
+        val secondBorderPaint = Paint().apply {
+            color = Color.parseColor("#00f0ff")
+            style = Paint.Style.STROKE
+            strokeWidth = 2f
+        }
+        canvas.drawRoundRect(100f, 580f, width - 100f, 960f, 16f, 16f, secondBorderPaint)
+
+        // Details
+        textPaint.textAlign = Paint.Align.CENTER
+        textPaint.color = Color.parseColor("#00f0ff")
+        textPaint.textSize = 34f
+        textPaint.typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
+        canvas.drawText("HUNTER PROTOCOL CONFIRMED", width / 2f, 650f, textPaint)
+
+        textPaint.color = Color.WHITE
+        textPaint.textSize = 28f
+        textPaint.typeface = Typeface.create(Typeface.MONOSPACE, Typeface.NORMAL)
+        canvas.drawText("RANK ASCENDED FOR REGISTRANT:", width / 2f, 720f, textPaint)
+
+        textPaint.color = Color.parseColor("#fcee09")
+        textPaint.textSize = 42f
+        textPaint.typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
+        canvas.drawText(username.uppercase(), width / 2f, 790f, textPaint)
+
+        textPaint.color = Color.parseColor("#9ca3af")
+        textPaint.textSize = 24f
+        textPaint.typeface = Typeface.create(Typeface.MONOSPACE, Typeface.NORMAL)
+        canvas.drawText("ACTIVE COORDINATES & ENERGY METRIC STATUS:", width / 2f, 850f, textPaint)
+
+        textPaint.color = Color.WHITE
+        textPaint.textSize = 28f
+        textPaint.typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
+        canvas.drawText(statsText, width / 2f, 910f, textPaint)
+
+        // Rewards bar
+        val rewardsY = 1020f
+        canvas.drawRoundRect(100f, rewardsY, width - 100f, rewardsY + 120f, 12f, 12f, cardPaint)
+        canvas.drawRoundRect(100f, rewardsY, width - 100f, rewardsY + 120f, 12f, 12f, secondBorderPaint)
+
+        textPaint.color = Color.parseColor("#10b981")
+        textPaint.textSize = 24f
+        textPaint.typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
+        canvas.drawText("SOLO UPGRADE: +5 MANUAL STATUS STAT POINTS GRANTED", width / 2f, rewardsY + 70f, textPaint)
+
+        // Footer signature
+        textPaint.color = Color.parseColor("#4b5563")
+        textPaint.textSize = 22f
+        textPaint.typeface = Typeface.create(Typeface.MONOSPACE, Typeface.NORMAL)
+        canvas.drawText("RATIFIED SECURE BY S-RANK SYSTEM ARCHITECT CORE", width / 2f, height - 70f, textPaint)
+
+        return bitmap
+    }
 }

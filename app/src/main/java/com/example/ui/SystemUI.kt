@@ -107,11 +107,6 @@ fun SystemMainApp(viewModel: SystemViewModel) {
             )
         }
 
-        // Full Screen Emergency warning popup
-        if (showFullScreenWarning) {
-            FullScreenEmergencyWarning(viewModel)
-        }
-
         // Full Screen Daily Quest Alert popup on opening/launching
         if (showFullScreenQuestAlert && currentScreen != "LOGIN" && currentScreen != "CHALLENGE_SETUP") {
             FullScreenDailyQuestAlert(viewModel)
@@ -125,7 +120,7 @@ fun SystemMainApp(viewModel: SystemViewModel) {
         // Full Screen Solo Leveling level-up animation overlay!
         val levelUpTo by viewModel.showLevelUpAnimation.collectAsStateWithLifecycle()
         if (levelUpTo != null) {
-            SoloLevelUpAnimationOverlay(level = levelUpTo!!, onDismiss = { viewModel.dismissLevelUpAnimation() })
+            SoloLevelUpAnimationOverlay(level = levelUpTo!!, viewModel = viewModel, onDismiss = { viewModel.dismissLevelUpAnimation() })
         }
     }
 }
@@ -1223,6 +1218,7 @@ fun DashboardScreen(viewModel: SystemViewModel) {
     val badgesList by viewModel.earnedBadges.collectAsStateWithLifecycle()
     val bodyFocusSplit by viewModel.bodyFocusSplit.collectAsStateWithLifecycle()
     val lastDayWeight by viewModel.lastDayTotalWeight.collectAsStateWithLifecycle()
+    var showTitlesDialog by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -1599,147 +1595,120 @@ fun DashboardScreen(viewModel: SystemViewModel) {
             }
         }
 
-        // 4. SECOND BENTO ROW (Titles/Badges Mini & Status Points availability)
-        Row(
+        // 4. SECOND BENTO ROW (Earned Titles & Special Monthly Goals)
+        Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                .height(105.dp)
+                .padding(vertical = 4.dp)
+                .border(1.dp, BentoBorderSlate, RoundedCornerShape(16.dp))
+                .clickable { showTitlesDialog = true },
+            colors = CardDefaults.cardColors(containerColor = SoloDarkGrey),
+            shape = RoundedCornerShape(16.dp)
         ) {
-            // Titles Mini Cell (Left half-column)
-            Card(
+            Column(
                 modifier = Modifier
-                    .weight(1f)
-                    .height(105.dp)
-                    .border(1.dp, BentoBorderSlate, RoundedCornerShape(16.dp)),
-                colors = CardDefaults.cardColors(containerColor = SoloDarkGrey),
-                shape = RoundedCornerShape(16.dp)
+                    .fillMaxSize()
+                    .padding(12.dp)
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(12.dp)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "EARNED TITLES",
-                        color = SoloTextSecondary,
+                        text = "EARNED PRESTIGE TITLES",
+                        color = SoloPurpleAccent,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace
+                    )
+                    Text(
+                        text = "VIEW ALL ⚡",
+                        color = SoloBlueAccent,
                         fontSize = 9.sp,
                         fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace,
-                        modifier = Modifier.padding(bottom = 8.dp)
+                        fontFamily = FontFamily.Monospace
                     )
+                }
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        if (badgesList.isEmpty()) {
-                            // Empty titles placeholders matching Design HTML spec
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    if (badgesList.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .background(SoloBlueAccent.copy(alpha = 0.05f))
+                                .border(1.dp, SoloBlueAccent.copy(alpha = 0.2f), RoundedCornerShape(6.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Box(modifier = Modifier.size(10.dp).background(SoloBlueAccent.copy(alpha = 0.5f), RoundedCornerShape(1.dp)))
+                        }
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .background(SoloPurpleAccent.copy(alpha = 0.05f))
+                                .border(1.dp, SoloPurpleAccent.copy(alpha = 0.2f), RoundedCornerShape(6.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("?", color = SoloPurpleAccent.copy(alpha = 0.4f), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        }
+                    } else {
+                        badgesList.take(5).forEach { badge ->
+                            val badgeColor = if (badge.iconName == "gold" || badge.iconName == "star") SoloGold else SoloPurpleAccent
                             Box(
                                 modifier = Modifier
-                                    .size(28.dp)
-                                    .background(SoloBlueAccent.copy(alpha = 0.05f))
-                                    .border(1.dp, SoloBlueAccent.copy(alpha = 0.2f), RoundedCornerShape(6.dp)),
+                                    .size(36.dp)
+                                    .background(badgeColor.copy(alpha = 0.1f))
+                                    .border(1.dp, badgeColor.copy(alpha = 0.3f), RoundedCornerShape(6.dp)),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Box(modifier = Modifier.size(10.dp).background(SoloBlueAccent.copy(alpha = 0.5f), RoundedCornerShape(1.dp)))
+                                val iconVector = when (badge.iconName) {
+                                    "military_tech" -> Icons.Default.MilitaryTech
+                                    "star" -> Icons.Default.Star
+                                    "local_fire_department" -> Icons.Default.LocalFireDepartment
+                                    "emoji_events" -> Icons.Default.EmojiEvents
+                                    "fitness_center" -> Icons.Default.FitnessCenter
+                                    else -> Icons.Default.MilitaryTech
+                                }
+                                Icon(
+                                    imageVector = iconVector,
+                                    contentDescription = null,
+                                    tint = badgeColor,
+                                    modifier = Modifier.size(18.dp)
+                                )
                             }
-                            Box(
-                                modifier = Modifier
-                                    .size(28.dp)
-                                    .background(SoloPurpleAccent.copy(alpha = 0.05f))
-                                    .border(1.dp, SoloPurpleAccent.copy(alpha = 0.2f), RoundedCornerShape(6.dp)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text("?", color = SoloPurpleAccent.copy(alpha = 0.4f), fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                            }
-                        } else {
-                            // Show up to 3 actual miniature earned badges
-                            badgesList.take(3).forEach { badge ->
-                                val badgeColor = if (badge.iconName == "gold" || badge.iconName == "star") SoloGold else SoloPurpleAccent
+                        }
+                        if (badgesList.size < 5) {
+                            repeat(5 - badgesList.size) {
                                 Box(
                                     modifier = Modifier
-                                        .size(28.dp)
-                                        .background(badgeColor.copy(alpha = 0.1f))
-                                        .border(1.dp, badgeColor.copy(alpha = 0.3f), RoundedCornerShape(6.dp)),
+                                        .size(36.dp)
+                                        .border(1.dp, SoloTextSecondary.copy(alpha = 0.1f), RoundedCornerShape(6.dp)),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    val iconVector = when (badge.iconName) {
-                                        "military_tech" -> Icons.Default.MilitaryTech
-                                        "star" -> Icons.Default.Star
-                                        "local_fire_department" -> Icons.Default.LocalFireDepartment
-                                        "emoji_events" -> Icons.Default.EmojiEvents
-                                        "fitness_center" -> Icons.Default.FitnessCenter
-                                        else -> Icons.Default.Check
-                                    }
-                                    Icon(
-                                        imageVector = iconVector,
-                                        contentDescription = null,
-                                        tint = badgeColor,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
-                            }
-                            if (badgesList.size < 3) {
-                                repeat(3 - badgesList.size) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(28.dp)
-                                            .border(1.dp, SoloTextSecondary.copy(alpha = 0.1f), RoundedCornerShape(6.dp)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text("?", color = SoloTextSecondary.copy(alpha = 0.2f), fontSize = 9.sp)
-                                    }
+                                    Text("?", color = SoloTextSecondary.copy(alpha = 0.2f), fontSize = 10.sp)
                                 }
                             }
                         }
                     }
                 }
             }
-
-            // Stat Points / Attribute Mini Cell (Right half-column)
-            val hasPoints = user.statPoints > 0
-            Card(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(105.dp)
-                    .border(
-                        width = if (hasPoints) 1.5.dp else 1.dp,
-                        color = if (hasPoints) SoloPurpleAccent else BentoBorderSlate,
-                        shape = RoundedCornerShape(16.dp)
-                    ),
-                colors = CardDefaults.cardColors(containerColor = SoloDarkGrey),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(12.dp),
-                    verticalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = "AVAILABLE AP",
-                        color = if (hasPoints) SoloPurpleAccent else SoloTextSecondary,
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace
-                    )
-
-                    Text(
-                        text = "${user.statPoints}",
-                        color = if (hasPoints) SoloPurpleAccent else SoloTextPrimary,
-                        fontSize = 32.sp,
-                        fontWeight = FontWeight.Black,
-                        fontFamily = FontFamily.Monospace,
-                        lineHeight = 32.sp
-                    )
-                }
-            }
         }
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // 5. STATUS POINT ATTRIBUTER CARD (High quality grid panel)
+        // MONTHLY WORKOUT GOALS CARD (Replaces the status point attributes card)
+        val sessionsGoal by viewModel.monthlyGoalSessions.collectAsStateWithLifecycle()
+        val volumeGoal by viewModel.monthlyGoalVolume.collectAsStateWithLifecycle()
+        val sessionsProgress by viewModel.monthlySessionsProgress.collectAsStateWithLifecycle()
+        val volumeProgress by viewModel.monthlyVolumeProgress.collectAsStateWithLifecycle()
+        var showGoalConfigDialog by remember { mutableStateOf(false) }
+
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1754,47 +1723,321 @@ fun DashboardScreen(viewModel: SystemViewModel) {
                 ) {
                     Column {
                         Text(
-                            text = "STATUS POINT ATTRIBUTES",
+                            text = "MONTHLY SPECIAL TRAINING MISSION",
                             color = SoloPurpleAccent,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             fontFamily = FontFamily.Monospace
                         )
                         Text(
-                            text = "Distribute power points into physical statistics.",
+                            text = "Accomplish active workout volume and frequency goals.",
                             color = SoloTextSecondary,
                             fontSize = 10.sp
                         )
                     }
 
-                    if (user.statPoints > 0) {
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(SoloBlueAccent.copy(alpha = 0.2f))
-                                .border(1.dp, SoloBlueAccent, RoundedCornerShape(6.dp))
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
-                        ) {
-                            Text(
-                                text = "DISTRIBUTE AVAILABLE",
-                                color = SoloBlueAccent,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 9.sp,
-                                fontFamily = FontFamily.Monospace
-                            )
-                        }
+                    IconButton(
+                        onClick = { showGoalConfigDialog = true },
+                        modifier = Modifier.background(SoloDarkGrey, CircleShape).size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Edit Goals",
+                            tint = SoloBlueAccent,
+                            modifier = Modifier.size(16.dp)
+                        )
                     }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Sessions Goal progress
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Training Frequency",
+                        color = SoloTextPrimary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "$sessionsProgress / $sessionsGoal Sessions",
+                        color = SoloBlueAccent,
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                val sessionsRatio = if (sessionsGoal > 0) (sessionsProgress.toFloat() / sessionsGoal).coerceIn(0f, 1f) else 0f
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(8.dp)
+                        .clip(CircleShape)
+                        .background(SoloDarkGrey)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(sessionsRatio)
+                            .fillMaxHeight()
+                            .clip(CircleShape)
+                            .background(SoloBlueAccent)
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Stats rows structured cleanly
-                StatDistributionRow("STRENGTH (STR)", user.strength) { viewModel.increaseStat("STR") }
-                StatDistributionRow("AGILITY (AGI)", user.agility) { viewModel.increaseStat("AGI") }
-                StatDistributionRow("VITALITY (VIT)", user.vitality) { viewModel.increaseStat("VIT") }
-                StatDistributionRow("INTELLIGENCE (INT)", user.intelligence) { viewModel.increaseStat("INT") }
-                StatDistributionRow("SENSE (SEN)", user.sense) { viewModel.increaseStat("SEN") }
+                // Volume Goal progress
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Total Volume Lifted",
+                        color = SoloTextPrimary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "${volumeProgress.toInt()} / $volumeGoal kg",
+                        color = SoloPurpleAccent,
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                val volumeRatio = if (volumeGoal > 0) (volumeProgress / volumeGoal).coerceIn(0f, 1f) else 0f
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(8.dp)
+                        .clip(CircleShape)
+                        .background(SoloDarkGrey)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(volumeRatio)
+                            .fillMaxHeight()
+                            .clip(CircleShape)
+                            .background(SoloPurpleAccent)
+                    )
+                }
             }
+        }
+
+        if (showGoalConfigDialog) {
+            var inputSessions by remember { mutableStateOf("$sessionsGoal") }
+            var inputVolume by remember { mutableStateOf("$volumeGoal") }
+            AlertDialog(
+                onDismissRequest = { showGoalConfigDialog = false },
+                title = {
+                    Text(
+                        text = "SET MONTHLY SPECIAL MISSIONS",
+                        color = SoloPurpleAccent,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 13.sp
+                    )
+                },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(
+                            text = "Configure targets to track dynamic growth variables inside your system dashboard.",
+                            color = SoloTextSecondary,
+                            fontSize = 11.sp
+                        )
+                        OutlinedTextField(
+                            value = inputSessions,
+                            onValueChange = { inputSessions = it },
+                            label = { Text("Target Sessions") },
+                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = SoloPurpleAccent, focusedLabelColor = SoloPurpleAccent, focusedTextColor = SoloTextPrimary, unfocusedTextColor = SoloTextPrimary),
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+                        OutlinedTextField(
+                            value = inputVolume,
+                            onValueChange = { inputVolume = it },
+                            label = { Text("Target Volume (kg)") },
+                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = SoloPurpleAccent, focusedLabelColor = SoloPurpleAccent, focusedTextColor = SoloTextPrimary, unfocusedTextColor = SoloTextPrimary),
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            val targetSessionsInt = inputSessions.toIntOrNull() ?: 12
+                            val targetVolumeInt = inputVolume.toIntOrNull() ?: 10000
+                            viewModel.saveMonthlyGoals(targetSessionsInt, targetVolumeInt)
+                            showGoalConfigDialog = false
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = SoloPurpleAccent),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("SAVE TARGETS", color = Color.White, fontSize = 11.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    Button(
+                        onClick = { showGoalConfigDialog = false },
+                        colors = ButtonDefaults.buttonColors(containerColor = SoloDarkGrey),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("CANCEL", color = SoloTextPrimary, fontSize = 11.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                    }
+                }
+            )
+        }
+
+        // Dialog for Earned Prestige Titles in 3:4 half screen with social share
+        if (showTitlesDialog) {
+            AlertDialog(
+                onDismissRequest = { showTitlesDialog = false },
+                properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+                modifier = Modifier
+                    .fillMaxWidth(0.85f)
+                    .aspectRatio(3f / 4f)
+                    .border(2.dp, SoloPurpleAccent, RoundedCornerShape(16.dp)),
+                containerColor = SoloBlack,
+                shape = RoundedCornerShape(16.dp),
+                title = {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "🏆 PRESTIGE TITLES",
+                            color = SoloPurpleAccent,
+                            fontWeight = FontWeight.Black,
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 14.sp
+                        )
+                        IconButton(onClick = { showTitlesDialog = false }) {
+                            Icon(Icons.Default.Close, contentDescription = "Close", tint = SoloTextSecondary)
+                        }
+                    }
+                },
+                text = {
+                    Column(
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        Text(
+                            text = "Accomplishments Bestowed Under System Authority",
+                            color = SoloTextSecondary,
+                            fontSize = 10.sp,
+                            fontFamily = FontFamily.Monospace,
+                            modifier = Modifier.padding(bottom = 12.dp)
+                        )
+
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth()
+                        ) {
+                            if (badgesList.isEmpty()) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(SoloDarkGrey, RoundedCornerShape(8.dp)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "No titles unlocked yet.\nComplete daily quests or log specialized workouts to awaken your prestige!",
+                                        color = SoloTextSecondary.copy(alpha = 0.6f),
+                                        fontSize = 11.sp,
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier.padding(16.dp)
+                                    )
+                                }
+                            } else {
+                                LazyColumn(
+                                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier.fillMaxSize()
+                                ) {
+                                    items(badgesList) { badge ->
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .background(SoloDarkGrey, RoundedCornerShape(8.dp))
+                                                .border(0.5.dp, BentoBorderSlate, RoundedCornerShape(8.dp))
+                                                .padding(10.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(36.dp)
+                                                    .background(SoloPurpleAccent.copy(alpha = 0.15f), CircleShape),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                val icon = when (badge.iconName) {
+                                                    "military_tech" -> Icons.Default.MilitaryTech
+                                                    "star" -> Icons.Default.Star
+                                                    "local_fire_department" -> Icons.Default.LocalFireDepartment
+                                                    "emoji_events" -> Icons.Default.EmojiEvents
+                                                    "fitness_center" -> Icons.Default.FitnessCenter
+                                                    else -> Icons.Default.MilitaryTech
+                                                }
+                                                Icon(icon, contentDescription = null, tint = SoloPurpleAccent, modifier = Modifier.size(20.dp))
+                                            }
+                                            Spacer(modifier = Modifier.width(12.dp))
+                                            Column {
+                                                Text(text = badge.name.uppercase(), color = SoloTextPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                                                Text(text = badge.description, color = SoloTextSecondary, fontSize = 9.sp, lineHeight = 11.sp)
+                                                Text(text = "UNLOCKED: ${badge.earnedDate}", color = SoloBlueAccent, fontSize = 8.sp, fontFamily = FontFamily.Monospace)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Text(
+                            text = "SHARE PRESTIGE TO:",
+                            color = SoloBlueAccent,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace,
+                            modifier = Modifier.padding(bottom = 6.dp)
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            listOf("X / Twitter", "Telegram", "Instagram", "WhatsApp").forEach { platform ->
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .background(SoloDarkGrey, RoundedCornerShape(6.dp))
+                                        .border(0.5.dp, SoloBlueAccent.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
+                                        .clickable {
+                                            viewModel.notifyMsg("Prestige titles shared successfully on $platform!", "achievement")
+                                        }
+                                        .padding(vertical = 8.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(platform, color = SoloBlueAccent, fontSize = 8.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {}
+            )
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -2574,28 +2817,146 @@ fun WorkoutsScreen(viewModel: SystemViewModel) {
             }
         }
 
-        if (suggestedExercises.isEmpty()) {
+        val activeExercises by viewModel.activeWorkoutExercises.collectAsStateWithLifecycle()
+        val context = androidx.compose.ui.platform.LocalContext.current
+
+        LaunchedEffect(suggestedExercises) {
+            if (suggestedExercises.isNotEmpty()) {
+                viewModel.initializeActiveWorkoutIfEmpty(suggestedExercises)
+            }
+        }
+
+        // LIVE SESSION PROGRESS HUD
+        val totalActive = activeExercises.size
+        val doneCount = activeExercises.count { it.isDone }
+        val leftCount = totalActive - doneCount
+        
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 10.dp)
+                .border(1.5.dp, SoloBlueAccent.copy(0.4f), RoundedCornerShape(12.dp)),
+            colors = CardDefaults.cardColors(containerColor = SoloDarkGrey.copy(alpha = 0.85f))
+        ) {
+            Column(modifier = Modifier.padding(14.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "⚡ HEVY LIVE WORKOUT TRACKER ⚡",
+                        color = SoloBlueAccent,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace,
+                        letterSpacing = 1.sp
+                    )
+                    Box(
+                        modifier = Modifier
+                            .background(SoloPurpleAccent.copy(0.2f), RoundedCornerShape(4.dp))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = "LIVE PROTOCOL ON", 
+                            color = SoloPurpleAccent, 
+                            fontSize = 8.sp, 
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                // Progress stats
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Exercises Completed: $doneCount  |  Left: $leftCount",
+                        color = SoloTextPrimary,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    
+                    Text(
+                        text = "${if (totalActive > 0) (doneCount * 100 / totalActive) else 0}% DONE",
+                        color = SoloGold,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                // Linear Progress bar indicator
+                val progressFraction = if (totalActive > 0) (doneCount.toFloat() / totalActive) else 0f
+                LinearProgressIndicator(
+                    progress = { progressFraction },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(8.dp)
+                        .clip(RoundedCornerShape(4.dp)),
+                    color = SoloBlueAccent,
+                    trackColor = Color.White.copy(0.1f)
+                )
+                
+                Spacer(modifier = Modifier.height(10.dp))
+                
+                // Quick reset / add action buttons
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    TextButton(
+                        onClick = { viewModel.resetActiveWorkout() },
+                        modifier = Modifier.weight(1f).height(32.dp),
+                        contentPadding = PaddingValues(0.dp)
+                    ) {
+                        Text("RESET WORKOUT QUEUE", color = Color.Red, fontSize = 9.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                    }
+                    Button(
+                        onClick = { viewModel.currentScreen.value = "MANAGE_EXERCISES" },
+                        colors = ButtonDefaults.buttonColors(containerColor = SoloBlueAccent),
+                        modifier = Modifier.weight(1.2f).height(32.dp),
+                        shape = RoundedCornerShape(6.dp),
+                        contentPadding = PaddingValues(0.dp)
+                    ) {
+                        Text("➕ EXERCISE LIBRARY", color = SoloBlack, fontSize = 9.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        if (activeExercises.isEmpty()) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 16.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Text(text = "Unscheduled Rest/Cardio Mode. You can log custom exercises below!", color = SoloTextSecondary, textAlign = TextAlign.Center)
+                Text(text = "Queue is empty. Load today's split or add extra exercises from the library!", color = SoloTextSecondary, textAlign = TextAlign.Center)
             }
         } else {
-            suggestedExercises.forEach { exercise ->
-                SuggestedExerciseCard(exercise) { loggedSets, loggedReps, loggedWeight, loggedBarWeight, loggedIntensity ->
-                    viewModel.logWorkoutExercise(
-                        name = exercise.name,
-                        category = exercise.category,
-                        weight = loggedWeight,
-                        sets = loggedSets,
-                        reps = loggedReps,
-                        barWeight = loggedBarWeight,
-                        intensity = loggedIntensity
-                    )
-                }
+            activeExercises.forEach { activeEx ->
+                ActiveWorkoutExerciseCard(
+                    activeEx = activeEx,
+                    onUpdateSets = { newSets ->
+                        viewModel.updateActiveExerciseSetsList(activeEx.id, newSets)
+                    },
+                    onUpdateBarWeight = { newBar ->
+                        viewModel.updateActiveExerciseBarWeight(activeEx.id, newBar)
+                    },
+                    onComplete = {
+                        viewModel.completeActiveExercise(activeEx.id, context)
+                    }
+                )
             }
         }
 
@@ -3589,23 +3950,36 @@ fun GridMetricsRow(title1: String, value1: String, title2: String, value2: Strin
 @Composable
 fun LeaderboardScreen(viewModel: SystemViewModel) {
     val userProfile by viewModel.userProfile.collectAsStateWithLifecycle()
+    val workoutLogs by viewModel.workoutLogs.collectAsStateWithLifecycle()
+    
     val userLevel = userProfile?.level ?: 1
+    val userXp = userProfile?.xp ?: 0
+    val userTotalXp = userLevel * 1000 + userXp
     val userName = userProfile?.name ?: "Challenger"
+    
+    val loggedCount = workoutLogs.size
+    val userFreqStr = when {
+        loggedCount >= 15 -> "6.2 sessions/wk"
+        loggedCount >= 8 -> "4.5 sessions/wk"
+        loggedCount >= 4 -> "3.1 sessions/wk"
+        loggedCount >= 1 -> "1.8 sessions/wk"
+        else -> "0.0 sessions/wk"
+    }
 
-    // Mock global Hunters list from Solo Leveling lore
+    // Mock global Hunters list with cumulative XP and weekly activity frequency
     val mockHunters = remember {
-        mutableListOf(
-            MockHunter("Sung Jin-Woo", 99, "S-Rank Monarch", 98, "active"),
-            MockHunter("Thomas Andre", 89, "S-Rank National", 91, "active"),
-            MockHunter("Ryuji Goto", 84, "S-Rank Hero", 84, "active"),
-            MockHunter("Cha Hae-In", 82, "S-Rank Sword", 81, "active"),
-            MockHunter("Baek Yoon-Ho", 74, "A-Rank Guildmaster", 70, "active"),
-            MockHunter("Choi Jong-In", 72, "A-Rank Mage", 68, "active")
+        listOf(
+            MockHunter("Sung Jin-Woo", 99, 450, "S-RANK MONARCH", "6.8 sessions/wk", "active", 142),
+            MockHunter("Thomas Andre", 89, 800, "S-RANK NATIONAL", "5.5 sessions/wk", "active", 94),
+            MockHunter("Ryuji Goto", 84, 200, "S-RANK HERO", "4.8 sessions/wk", "active", 83),
+            MockHunter("Cha Hae-In", 82, 900, "S-RANK SWORD", "4.5 sessions/wk", "active", 79),
+            MockHunter("Baek Yoon-Ho", 74, 600, "A-RANK GUILDMASTER", "3.9 sessions/wk", "active", 58),
+            MockHunter("Choi Jong-In", 72, 500, "A-RANK MAGE", "3.6 sessions/wk", "active", 54)
         )
     }
 
-    // Insert user into list dynamically based on their level
-    val sortedHunters = remember(userLevel, userName) {
+    // Insert user and sort by total score (level * 1000 + xp)
+    val sortedHunters = remember(userLevel, userXp, userName, userFreqStr, loggedCount) {
         val list = mockHunters.toMutableList()
         val userRankClass = when {
             userLevel >= 11 -> "S-RANK MONARCH"
@@ -3615,8 +3989,8 @@ fun LeaderboardScreen(viewModel: SystemViewModel) {
             userLevel >= 3 -> "D-RANK SCOUT"
             else -> "E-RANK RECRUIT"
         }
-        list.add(MockHunter(userName, userLevel, userRankClass, 50, "user"))
-        list.sortByDescending { it.level }
+        list.add(MockHunter(userName, userLevel, userXp, userRankClass, userFreqStr, "user", loggedCount))
+        list.sortByDescending { it.level * 1000 + it.xp }
         list
     }
 
@@ -3642,11 +4016,60 @@ fun LeaderboardScreen(viewModel: SystemViewModel) {
             fontWeight = FontWeight.ExtraBold
         )
         Text(
-            text = "Compete with global S-Rank anomalies. Climb up rankings by leveling up your daily stats.",
+            text = "Compete with global S-Rank anomalies. Climb the ranks by increasing your level, total XP, and weekly workout log frequency.",
             color = SoloTextSecondary,
             fontSize = 13.sp,
             modifier = Modifier.padding(bottom = 16.dp)
         )
+
+        // Compare Card
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 16.dp)
+                .border(1.dp, SoloBlueAccent.copy(0.3f), RoundedCornerShape(12.dp)),
+            colors = CardDefaults.cardColors(containerColor = SoloDarkGrey)
+        ) {
+            Column(modifier = Modifier.padding(14.dp)) {
+                Text(
+                    text = "YOUR SYSTEM COMPARISON",
+                    color = SoloBlueAccent,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace,
+                    letterSpacing = 1.sp
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text("Total XP Reward Points", color = SoloTextSecondary, fontSize = 11.sp)
+                        Text("$userTotalXp Points", color = SoloTextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Black)
+                    }
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text("Raid Frequency", color = SoloTextSecondary, fontSize = 11.sp)
+                        Text(userFreqStr, color = SoloPurpleAccent, fontSize = 16.sp, fontWeight = FontWeight.Black, fontFamily = FontFamily.Monospace)
+                    }
+                }
+                Spacer(modifier = Modifier.height(10.dp))
+                val myRank = sortedHunters.indexOfFirst { it.type == "user" } + 1
+                val behindHunter = if (myRank > 1) sortedHunters[myRank - 2] else null
+                val progressText = if (behindHunter != null) {
+                    val gap = (behindHunter.level * 1000 + behindHunter.xp) - userTotalXp
+                    "SYSTEM PROJECTIONS: You are currently Rank #$myRank. Accumulate $gap model XP to surpass ${behindHunter.name} for Rank #${myRank - 1}!"
+                } else {
+                    "SYSTEM MONARCH STATUS: You have reached the absolute peak of the leaderboard! S-Rank security clearances unlocked."
+                }
+                Text(
+                    text = progressText,
+                    color = SoloTextSecondary,
+                    fontSize = 10.sp,
+                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                )
+            }
+        }
 
         sortedHunters.forEachIndexed { index, hunter ->
             val isUser = hunter.type == "user"
@@ -3667,7 +4090,7 @@ fun LeaderboardScreen(viewModel: SystemViewModel) {
                         shape = RoundedCornerShape(12.dp)
                     ),
                 colors = CardDefaults.cardColors(
-                    containerColor = if (isUser) SoloDarkGrey else SoloCardBg.copy(0.7f)
+                    containerColor = if (isUser) SoloCardBg else SoloCardBg.copy(0.7f)
                 )
             ) {
                 Row(
@@ -3707,6 +4130,13 @@ fun LeaderboardScreen(viewModel: SystemViewModel) {
                                 }
                             }
                             Text(text = hunter.rankName, color = SoloTextSecondary, fontSize = 11.sp)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Freq: ${hunter.activityFrequency} (${hunter.completedRaids} logs)",
+                                color = SoloTextSecondary.copy(alpha = 0.8f),
+                                fontSize = 10.sp,
+                                fontFamily = FontFamily.Monospace
+                            )
                         }
                     }
 
@@ -3719,9 +4149,10 @@ fun LeaderboardScreen(viewModel: SystemViewModel) {
                             fontFamily = FontFamily.Monospace
                         )
                         Text(
-                            text = "Daily complete: ${hunter.questSuccess}%",
+                            text = "${hunter.level * 1000 + hunter.xp} XP",
                             color = SoloTextSecondary,
-                            fontSize = 10.sp
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }
@@ -3733,9 +4164,11 @@ fun LeaderboardScreen(viewModel: SystemViewModel) {
 data class MockHunter(
     val name: String,
     val level: Int,
+    val xp: Int,
     val rankName: String,
-    val questSuccess: Int,
-    val type: String
+    val activityFrequency: String,
+    val type: String,
+    val completedRaids: Int
 )
 
 val SoloPlusGlow = Color(0x2200E5FF)
@@ -3903,8 +4336,8 @@ fun SystemPopupNotification(message: String, type: String, onDismiss: () -> Unit
     
     val titleText = when (type) {
         "achievement" -> "[ SYSTEM ACHIEVEMENT UNLOCKED ]"
-        "warning" -> "[ SYSTEM ALARM DECREE ]"
-        else -> "[ SYSTEM DECREE ]"
+        "warning" -> "[ SYSTEM WARNING ALERT ]"
+        else -> "[ SYSTEM ALERT NOTIFICATION ]"
     }
 
     Box(
@@ -3963,7 +4396,7 @@ fun SystemPopupNotification(message: String, type: String, onDismiss: () -> Unit
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        text = "ACCEPT DECREE",
+                        text = "DISMISS ALERT",
                         color = SoloBlack,
                         fontWeight = FontWeight.Bold,
                         fontSize = 13.sp,
@@ -4111,7 +4544,7 @@ fun AiTrainerScreen(viewModel: SystemViewModel) {
         ) {
             Column(modifier = Modifier.padding(20.dp)) {
                 Text(
-                    text = "[ SHADOW GUIDE DECREE ]",
+                    text = "[ SHADOW GUIDE INSTRUCTIONS ]",
                     color = SoloPurpleAccent,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Black,
@@ -5891,7 +6324,7 @@ fun FullScreenDailyQuestAlert(viewModel: SystemViewModel) {
                             .testTag("accept_quest_fullscreen_button")
                     ) {
                         Text(
-                            text = "ACCEPT DECREE / ENTER SYSTEM",
+                            text = "ENTER SYSTEM",
                             color = SoloBlack,
                             fontWeight = FontWeight.Black,
                             fontSize = 13.sp,
@@ -6129,7 +6562,8 @@ data class CyberSpark(
 )
 
 @Composable
-fun SoloLevelUpAnimationOverlay(level: Int, onDismiss: () -> Unit) {
+fun SoloLevelUpAnimationOverlay(level: Int, viewModel: SystemViewModel, onDismiss: () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val infiniteTransition = rememberInfiniteTransition(label = "cyber_pulser_system")
     val random = remember { java.util.Random() }
 
@@ -6650,7 +7084,7 @@ fun SoloLevelUpAnimationOverlay(level: Int, onDismiss: () -> Unit) {
                     }
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "+5 STATUS POINTS ALLOCATED TO COGNITIVE BASE",
+                        text = "NEW SYSTEMS PROFILE SYNC SUCCEEDED",
                         color = Color.White,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.ExtraBold,
@@ -6659,7 +7093,7 @@ fun SoloLevelUpAnimationOverlay(level: Int, onDismiss: () -> Unit) {
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "Manual calibration parameter blocks have been unlocked. Re-distribute stat points on the systems core dashboard at any time.",
+                        text = "System parameters have been successfully scaled with your training progression.",
                         color = Color.White.copy(alpha = 0.6f),
                         fontSize = 8.5.sp,
                         lineHeight = 12.sp,
@@ -6668,7 +7102,115 @@ fun SoloLevelUpAnimationOverlay(level: Int, onDismiss: () -> Unit) {
                 }
             }
 
-            Spacer(modifier = Modifier.height(26.dp))
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // VISUAL PREVIEW OF S-RANK LEVEL STATUS CARD
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.5.dp, colorCyberBlue, RoundedCornerShape(8.dp)),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF070B14))
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    val profileValue = viewModel.userProfile.collectAsStateWithLifecycle().value
+                    Text(
+                        text = "⚡ S-RANK ASCENSION SNAPSHOT ⚡",
+                        color = colorCyberYellow,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace,
+                        letterSpacing = 1.sp,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    
+                    Text(
+                        text = "REGISTRANT: ${profileValue?.name?.uppercase() ?: "HUNTER"}",
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace
+                    )
+                    
+                    Spacer(modifier = Modifier.height(4.dp))
+                    
+                    Text(
+                        text = "NEW RANKS: LEVEL $level • MONARCH STATUS ACTIVE",
+                        color = colorCyberBlue,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontFamily = FontFamily.Monospace
+                    )
+                    
+                    Spacer(modifier = Modifier.height(6.dp))
+                    
+                    Text(
+                        text = "RANK VERIFICATION STATUS: COMPLETE",
+                        color = Color.White.copy(alpha = 0.8f),
+                        fontSize = 10.sp,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // LEVEL UP UTILITY ROW: DOWNLOAD CARD & SHARE OPTIONS
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // DOWNLOAD CARD IMAGE
+                Button(
+                    onClick = { viewModel.downloadLevelUpCard(context, level) },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1F2937)),
+                    modifier = Modifier.weight(1f).height(44.dp).border(1.dp, colorCyberYellow, RoundedCornerShape(4.dp)),
+                    shape = RoundedCornerShape(4.dp),
+                    contentPadding = PaddingValues(0.dp)
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.Download, contentDescription = null, tint = colorCyberYellow, modifier = Modifier.size(16.dp))
+                        Text(
+                            text = "DOWNLOAD CARD", 
+                            color = colorCyberYellow, 
+                            fontSize = 8.sp, 
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                }
+
+                // SHARE WITH CHROME / APPS
+                Button(
+                    onClick = { viewModel.shareLevelUpCard(context, level) },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1F2937)),
+                    modifier = Modifier.weight(1f).height(44.dp).border(1.dp, colorCyberBlue, RoundedCornerShape(4.dp)),
+                    shape = RoundedCornerShape(4.dp),
+                    contentPadding = PaddingValues(0.dp)
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.Share, contentDescription = null, tint = colorCyberBlue, modifier = Modifier.size(16.dp))
+                        Text(
+                            text = "SHARE STATUS", 
+                            color = colorCyberBlue, 
+                            fontSize = 8.sp, 
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
 
             // PRIMARY CONFIRM ACTION BUTTON (Cyberpunk high-contrast flat brutalist styled CTA)
             Button(
@@ -6808,6 +7350,7 @@ fun ProfileScreen(viewModel: SystemViewModel) {
     val measurementsState by viewModel.bodyMeasurements.collectAsStateWithLifecycle()
     val lastDayWeight by viewModel.lastDayTotalWeight.collectAsStateWithLifecycle()
     var selectedProfileTab by remember { mutableStateOf(0) }
+    var showAdminChatbot by remember { mutableStateOf(false) }
 
     val profile = profileState ?: return
     val latestMeasurement = measurementsState.firstOrNull()
@@ -6836,6 +7379,7 @@ fun ProfileScreen(viewModel: SystemViewModel) {
 
     var showSimReferral by remember { mutableStateOf(false) }
     var referrerFriendName by remember { mutableStateOf("") }
+    var showHunterIdShareDialog by remember { mutableStateOf(false) }
     val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
     val context = androidx.compose.ui.platform.LocalContext.current
 
@@ -6931,6 +7475,40 @@ fun ProfileScreen(viewModel: SystemViewModel) {
                               profile.name.uppercase() == "SUNG JINWOO" ||
                               profile.email.isBlank()
 
+        if (isMyProfileAdmin) {
+            Button(
+                onClick = { showAdminChatbot = true },
+                colors = ButtonDefaults.buttonColors(containerColor = SoloPurpleAccent),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 6.dp)
+                    .border(2.dp, SoloPurpleAccent.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
+                    .testTag("open_admin_chatbot_btn"),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        Icons.Default.Settings,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "⚡ OPEN SYSTEM ARCHITECT CHATBOT ⚡",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 11.sp,
+                        letterSpacing = 1.sp
+                    )
+                }
+            }
+        }
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -6974,31 +7552,258 @@ fun ProfileScreen(viewModel: SystemViewModel) {
                     fontFamily = FontFamily.Monospace
                 )
             }
-            if (isMyProfileAdmin) {
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(if (selectedProfileTab == 2) SoloBlueAccent else Color.Transparent)
-                        .clickable { selectedProfileTab = 2 }
-                        .padding(vertical = 10.dp)
-                        .testTag("admin_tab_selection_btn"),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "ADMIN CODES",
-                        color = if (selectedProfileTab == 2) SoloBlack else SoloTextSecondary,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 10.sp,
-                        fontFamily = FontFamily.Monospace
-                    )
-                }
-            }
         }
 
         if (selectedProfileTab == 0) {
+            // 3:4 EXQUISITE HUNTER LICENSE CARD (Sovereign Credentials ID)
+            val rankClass = when {
+                profile.level >= 11 -> "S-RANK MONARCH"
+                profile.level >= 9 -> "A-RANK ELITE"
+                profile.level >= 7 -> "B-RANK VETERAN"
+                profile.level >= 5 -> "C-RANK HUNTER"
+                profile.level >= 3 -> "D-RANK SCOUT"
+                else -> "E-RANK RECRUIT"
+            }
+            val totalLiftLimit = profile.benchPress + profile.squat + profile.deadlift + profile.overheadPress
+
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth(0.92f)
+                    .align(Alignment.CenterHorizontally)
+                    .padding(vertical = 12.dp)
+                    .aspectRatio(3f / 4f)
+                    .border(2.dp, SoloBlueAccent, RoundedCornerShape(20.dp)),
+                colors = CardDefaults.cardColors(containerColor = SoloDarkGrey),
+                shape = RoundedCornerShape(20.dp)
+            ) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    // Futuristic Background lines
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(20.dp),
+                        verticalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        // Header Block
+                        Column {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "HUNTER ASSOCIATION LICENSE",
+                                    color = SoloBlueAccent,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Black,
+                                    fontFamily = FontFamily.Monospace,
+                                    letterSpacing = 1.sp
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(SoloPurpleAccent.copy(alpha = 0.2f))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = "VERIFIED",
+                                        color = SoloPurpleAccent,
+                                        fontSize = 8.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = FontFamily.Monospace
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Divider(color = SoloBlueAccent.copy(alpha = 0.3f), thickness = 1.dp)
+                        }
+
+                        // Middle Block (Photo Placeholder & Main Info)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Hologram Profile Pic
+                            Box(
+                                modifier = Modifier
+                                    .size(85.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(SoloBlack)
+                                    .border(1.dp, SoloPurpleAccent, RoundedCornerShape(12.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Person,
+                                    contentDescription = null,
+                                    tint = SoloBlueAccent.copy(alpha = 0.7f),
+                                    modifier = Modifier.size(50.dp)
+                                )
+                                // Scan line indicator
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(2.dp)
+                                        .background(SoloPurpleAccent)
+                                        .align(Alignment.Center)
+                                )
+                            }
+
+                            // Credentials text fields
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(
+                                    text = profile.name.uppercase(),
+                                    color = SoloTextPrimary,
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Black,
+                                    fontFamily = FontFamily.SansSerif,
+                                    letterSpacing = 0.5.sp
+                                )
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Text(
+                                        text = "LV.${profile.level}",
+                                        color = SoloBlueAccent,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = FontFamily.Monospace
+                                    )
+                                    Text(
+                                        text = "|",
+                                        color = SoloTextSecondary.copy(alpha = 0.5f),
+                                        fontSize = 12.sp
+                                    )
+                                    Text(
+                                        text = rankClass,
+                                        color = SoloPurpleAccent,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Black,
+                                        fontFamily = FontFamily.Monospace
+                                    )
+                                }
+                            }
+                        }
+
+                        // Parameters Grid Block (Measurements & Capacity)
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            // Row 1: Weight capacity & active protocol
+                            Row(modifier = Modifier.fillMaxWidth()) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("WEIGHT LIMIT CAPACITY", color = SoloTextSecondary, fontSize = 8.sp, fontFamily = FontFamily.Monospace)
+                                    Text("${String.format("%.1f", totalLiftLimit)} kg", color = SoloTextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                                }
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("ACTIVE PROTOCOL", color = SoloTextSecondary, fontSize = 8.sp, fontFamily = FontFamily.Monospace)
+                                    Text("EVOLUTION PROTOCOL v2", color = SoloBlueAccent, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                                }
+                            }
+
+                            // Row 2: Chest & Arm Measurements
+                            Row(modifier = Modifier.fillMaxWidth()) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("CHEST WIDTH", color = SoloTextSecondary, fontSize = 8.sp, fontFamily = FontFamily.Monospace)
+                                    Text("${editChestDim.toInt()} cm", color = SoloTextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                                }
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("ARM BICEP SIZE", color = SoloTextSecondary, fontSize = 8.sp, fontFamily = FontFamily.Monospace)
+                                    Text("${editArmsDim.toInt()} cm", color = SoloTextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                                }
+                            }
+                        }
+
+                        // Footer Block (System watermark & Share button)
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Divider(color = SoloBlueAccent.copy(alpha = 0.2f), thickness = 0.5.dp)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "SYSTEM ARCHITECT LICENSE VERIFICATION CODE: AA-902",
+                                    color = SoloTextSecondary.copy(alpha = 0.4f),
+                                    fontSize = 7.sp,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(SoloBlueAccent)
+                                        .clickable {
+                                            showHunterIdShareDialog = true
+                                        }
+                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                        .testTag("share_hunter_id_card_button")
+                                ) {
+                                    Text(
+                                        text = "SHARE CARD ⚡",
+                                        color = SoloBlack,
+                                        fontSize = 8.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = FontFamily.Monospace
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (showHunterIdShareDialog) {
+                AlertDialog(
+                    onDismissRequest = { showHunterIdShareDialog = false },
+                    title = {
+                        Text(
+                            text = "SHARE HUNTER ID CARD",
+                            color = SoloBlueAccent,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text(
+                                text = "Select a registry endpoint to establish resonance or broadcast your monarch fitness credentials.",
+                                color = SoloTextSecondary,
+                                fontSize = 11.sp
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                listOf("X / Twitter", "Telegram", "Instagram", "WhatsApp").forEach { platform ->
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .background(SoloDarkGrey, RoundedCornerShape(6.dp))
+                                            .border(0.5.dp, SoloBlueAccent.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
+                                            .clickable {
+                                                showHunterIdShareDialog = false
+                                                viewModel.notifyMsg("Hunter Association ID successfully broadcasted to $platform!", "achievement")
+                                            }
+                                            .padding(vertical = 8.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(platform, color = SoloBlueAccent, fontSize = 8.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = { showHunterIdShareDialog = false },
+                            colors = ButtonDefaults.buttonColors(containerColor = SoloDarkGrey),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("CLOSE", color = SoloTextPrimary, fontSize = 11.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                )
+            }
+
             // WEB RADAR CHART CARD
-        Card(
+            Card(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(vertical = 8.dp)
@@ -7346,7 +8151,7 @@ fun ProfileScreen(viewModel: SystemViewModel) {
                         )
                         Spacer(modifier = Modifier.width(12.dp))
                         Text(
-                            text = "LOBBY RE-BRANDING DECREE",
+                            text = "LOBBY RE-BRANDING OPTION",
                             color = SoloPurpleAccent,
                             fontWeight = FontWeight.Bold,
                             fontSize = 13.sp,
@@ -7406,155 +8211,6 @@ fun ProfileScreen(viewModel: SystemViewModel) {
                     }
                 }
             }
-        } else if (selectedProfileTab == 2 && isMyProfileAdmin) {
-            var adminPromptInput by remember { mutableStateOf("") }
-            val adminProcessing by viewModel.adminProcessing.collectAsStateWithLifecycle()
-            val adminLogs by viewModel.adminResponseLog.collectAsStateWithLifecycle()
-
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp)
-                    .border(2.dp, SoloPurpleAccent.copy(alpha = 0.8f), RoundedCornerShape(16.dp)),
-                colors = CardDefaults.cardColors(containerColor = SoloBlack.copy(0.4f))
-            ) {
-                Column(
-                    modifier = Modifier.padding(18.dp).fillMaxWidth()
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(bottom = 12.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.Settings,
-                            contentDescription = "System Admin Control Panel",
-                            tint = SoloPurpleAccent,
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(
-                            text = "SYSTEM ARCHITECT CONTROL",
-                            color = SoloPurpleAccent,
-                            fontWeight = FontWeight.Black,
-                            fontSize = 13.sp,
-                            fontFamily = FontFamily.Monospace,
-                            letterSpacing = 1.sp
-                        )
-                    }
-
-                    Text(
-                        text = "As the Monarch of this system, enter visual prompt decrees below to overwrite metrics or database states dynamically. Powered by Gemini AI.",
-                        color = SoloTextSecondary,
-                        fontSize = 11.sp,
-                        modifier = Modifier.padding(bottom = 16.dp)
-                    )
-
-                    OutlinedTextField(
-                        value = adminPromptInput,
-                        onValueChange = { adminPromptInput = it },
-                        label = { Text("Write System Prompt decree...", color = SoloPurpleAccent, fontFamily = FontFamily.Monospace, fontSize = 11.sp) },
-                        placeholder = { Text("e.g. \"Level up 10 times and double my intelligence\"", color = SoloTextSecondary.copy(0.4f), fontSize = 11.sp) },
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = SoloPurpleAccent,
-                            unfocusedBorderColor = BentoBorderSlate,
-                            focusedTextColor = SoloTextPrimary,
-                            unfocusedTextColor = SoloTextPrimary
-                        ),
-                        textStyle = LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace, fontSize = 13.sp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("admin_prompt_input_field"),
-                        maxLines = 4,
-                        minLines = 2
-                    )
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    if (adminProcessing) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
-                            horizontalArrangement = Arrangement.Center,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            CircularProgressIndicator(
-                                color = SoloPurpleAccent,
-                                modifier = Modifier.size(24.dp)
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Text(
-                                text = "DECODING NEURAL BLUEPRINTS...",
-                                color = SoloPurpleAccent,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace
-                            )
-                        }
-                    } else {
-                        Button(
-                            onClick = {
-                                if (adminPromptInput.isNotBlank()) {
-                                    viewModel.executeAdminPrompt(adminPromptInput)
-                                    adminPromptInput = ""
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = SoloPurpleAccent),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("execute_admin_decree_btn"),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text(
-                                text = "EXECUTE DECREE",
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 11.sp,
-                                fontFamily = FontFamily.Monospace
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(20.dp))
-
-                    Text(
-                        text = "TRANSMISSION JOURNAL HISTORY",
-                        color = SoloTextPrimary,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 11.sp,
-                        fontFamily = FontFamily.Monospace,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 140.dp)
-                            .background(SoloDarkGrey, RoundedCornerShape(8.dp))
-                            .border(1.dp, BentoBorderSlate, RoundedCornerShape(8.dp))
-                            .padding(8.dp)
-                    ) {
-                        if (adminLogs.isEmpty()) {
-                            Text(
-                                text = "Secure link initialized. Whisper your decrees to begin core system updates.",
-                                color = SoloTextSecondary.copy(0.5f),
-                                fontSize = 11.sp,
-                                fontFamily = FontFamily.Monospace
-                            )
-                        } else {
-                            LazyColumn(reverseLayout = true) {
-                                items(adminLogs.reversed()) { logEntry ->
-                                    Text(
-                                        text = logEntry,
-                                        color = if (logEntry.contains("SUCCEEDED")) SoloBlueAccent else if (logEntry.contains("FAILED")) SoloDanger else SoloTextPrimary,
-                                        fontSize = 11.sp,
-                                        fontFamily = FontFamily.Monospace,
-                                        modifier = Modifier.padding(vertical = 2.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
         }
 
         Spacer(modifier = Modifier.height(40.dp))
@@ -7610,6 +8266,10 @@ fun ProfileScreen(viewModel: SystemViewModel) {
             },
             containerColor = SoloDarkGrey
         )
+    }
+
+    if (showAdminChatbot) {
+        AdminChatbotDialog(viewModel = viewModel, onDismiss = { showAdminChatbot = false })
     }
 }
 
@@ -7673,7 +8333,7 @@ fun ManageExercisesScreen(viewModel: SystemViewModel) {
                 Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = SoloBlueAccent)
             }
             Text(
-                text = "HEVY EXERCISE DIRECTORY",
+                text = "EXERCISE LIBRARY",
                 color = SoloBlueAccent,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
@@ -8062,6 +8722,29 @@ fun ManageExercisesScreen(viewModel: SystemViewModel) {
                         colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = SoloPurpleAccent, focusedLabelColor = SoloPurpleAccent, focusedTextColor = SoloTextPrimary, unfocusedTextColor = SoloTextPrimary),
                         modifier = Modifier.fillMaxWidth()
                     )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Button(
+                        onClick = {
+                            viewModel.addExerciseToActiveWorkout(
+                                com.example.data.model.PreloadedExercise(
+                                    name = activeExerciseName,
+                                    category = editCategory,
+                                    equipmentRequired = editEquipment,
+                                    baseSets = 3,
+                                    baseReps = "10",
+                                    description = editDesc
+                                )
+                            )
+                            editDialogVisible = false
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = SoloBlueAccent),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("➕ ADD TO ACTIVE WORKOUT QUEUE", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+                    }
                 }
             },
             confirmButton = {
@@ -8101,6 +8784,444 @@ fun ManageExercisesScreen(viewModel: SystemViewModel) {
             },
             containerColor = SoloDarkGrey
         )
+    }
+}
+
+@Composable
+fun ActiveWorkoutExerciseCard(
+    activeEx: ActiveWorkoutExercise,
+    onUpdateSets: (List<ActiveWorkoutSet>) -> Unit,
+    onUpdateBarWeight: (Float) -> Unit,
+    onComplete: () -> Unit
+) {
+    var rawBarWeight by remember(activeEx.barWeight) { mutableStateOf(activeEx.barWeight.toString()) }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp)
+            .border(
+                width = 1.dp,
+                color = if (activeEx.isDone) Color(0xFF10B981).copy(0.4f) else SoloBlueAccent.copy(0.3f),
+                shape = RoundedCornerShape(14.dp)
+            ),
+        colors = CardDefaults.cardColors(containerColor = SoloCardBg)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            // Header Row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = activeEx.name,
+                        color = if (activeEx.isDone) Color(0xFF10B981) else SoloBlueAccent,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 16.sp
+                    )
+                    Text(
+                        text = activeEx.category.uppercase(),
+                        color = SoloTextSecondary,
+                        fontSize = 9.sp,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                
+                if (activeEx.isDone) {
+                    Box(
+                        modifier = Modifier
+                            .background(Color(0xFF10B981).copy(0.15f), RoundedCornerShape(4.dp))
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = "✅ LOGGED • ${activeEx.aiIntensity.uppercase()} INTENSITY", 
+                            color = Color(0xFF10B981), 
+                            fontSize = 9.sp, 
+                            fontWeight = FontWeight.Bold, 
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                } else {
+                    Button(
+                        onClick = onComplete,
+                        colors = ButtonDefaults.buttonColors(containerColor = SoloBlueAccent),
+                        shape = RoundedCornerShape(6.dp),
+                        modifier = Modifier.height(32.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
+                    ) {
+                        Text("LOG VIA AI ⚡", color = SoloBlack, fontSize = 9.sp, fontWeight = FontWeight.ExtraBold, fontFamily = FontFamily.Monospace)
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Sets rows
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                activeEx.setsList.forEachIndexed { idx, setItem ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Set ${idx + 1}",
+                            color = SoloTextPrimary,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.width(42.dp)
+                        )
+                        OutlinedTextField(
+                            value = setItem.reps,
+                            onValueChange = { newVal ->
+                                val updated = activeEx.setsList.mapIndexed { i, s ->
+                                    if (i == idx) s.copy(reps = newVal) else s
+                                }
+                                onUpdateSets(updated)
+                            },
+                            enabled = !activeEx.isDone,
+                            label = { Text("Reps", fontSize = 8.sp) },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = SoloBlueAccent, focusedLabelColor = SoloBlueAccent, focusedTextColor = SoloTextPrimary, unfocusedTextColor = SoloTextPrimary),
+                            modifier = Modifier.weight(1f),
+                            singleLine = true
+                        )
+                        OutlinedTextField(
+                            value = setItem.weight,
+                            onValueChange = { newVal ->
+                                val updated = activeEx.setsList.mapIndexed { i, s ->
+                                    if (i == idx) s.copy(weight = newVal) else s
+                                }
+                                onUpdateSets(updated)
+                            },
+                            enabled = !activeEx.isDone,
+                            label = { Text("Weight (kg)", fontSize = 8.sp) },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = SoloBlueAccent, focusedLabelColor = SoloBlueAccent, focusedTextColor = SoloTextPrimary, unfocusedTextColor = SoloTextPrimary),
+                            modifier = Modifier.weight(1f),
+                            singleLine = true
+                        )
+                        IconButton(
+                            onClick = {
+                                if (activeEx.setsList.size > 1 && !activeEx.isDone) {
+                                    val updated = activeEx.setsList.filterIndexed { i, _ -> i != idx }
+                                    onUpdateSets(updated)
+                                }
+                            },
+                            enabled = !activeEx.isDone,
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "Delete Set",
+                                tint = if (activeEx.isDone) Color.Gray else Color.Red.copy(alpha = 0.8f),
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                }
+
+                if (!activeEx.isDone) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Button(
+                            onClick = {
+                                val lastReps = activeEx.setsList.lastOrNull()?.reps ?: "10"
+                                val lastWeight = activeEx.setsList.lastOrNull()?.weight ?: "15"
+                                val updated = activeEx.setsList + ActiveWorkoutSet(id = activeEx.setsList.size + 1, reps = lastReps, weight = lastWeight)
+                                onUpdateSets(updated)
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = SoloDarkGrey),
+                            shape = RoundedCornerShape(6.dp),
+                            modifier = Modifier.height(28.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
+                        ) {
+                            Text("+ ADD SET", color = SoloBlueAccent, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        OutlinedTextField(
+                            value = rawBarWeight,
+                            onValueChange = { newVal ->
+                                rawBarWeight = newVal
+                                newVal.toFloatOrNull()?.let { onUpdateBarWeight(it) }
+                            },
+                            label = { Text("Barbell (kg)", fontSize = 8.sp) },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = SoloBlueAccent, focusedLabelColor = SoloBlueAccent, focusedTextColor = SoloTextPrimary, unfocusedTextColor = SoloTextPrimary),
+                            modifier = Modifier.width(100.dp),
+                            singleLine = true
+                        )
+                    }
+                } else {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Barbell: ${activeEx.barWeight} kg | Target Completed: ${activeEx.sets} sets x ${activeEx.reps} reps @ ${activeEx.weight} kg",
+                        color = SoloTextSecondary,
+                        fontSize = 11.sp,
+                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun AdminChatbotDialog(viewModel: SystemViewModel, onDismiss: () -> Unit) {
+    val chatMessages by viewModel.adminChatMessages.collectAsStateWithLifecycle()
+    val adminProcessing by viewModel.adminProcessing.collectAsStateWithLifecycle()
+    var inputMessage by remember { mutableStateOf("") }
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(chatMessages.size) {
+        if (chatMessages.isNotEmpty()) {
+            listState.animateScrollToItem(chatMessages.size - 1)
+        }
+    }
+
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth(0.95f)
+                .fillMaxHeight(0.85f)
+                .border(2.dp, SoloPurpleAccent, RoundedCornerShape(16.dp)),
+            colors = CardDefaults.cardColors(containerColor = SoloBlack),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp)
+            ) {
+                // Header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .background(SoloPurpleAccent),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Default.Settings, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = "SYSTEM ARCHITECT TERMINAL",
+                                color = SoloPurpleAccent,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp,
+                                fontFamily = FontFamily.Monospace,
+                                letterSpacing = 1.sp
+                            )
+                            Text(
+                                text = "Direct App Database Manipulation",
+                                color = SoloTextSecondary,
+                                fontSize = 9.sp,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                    }
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, contentDescription = "Close", tint = SoloTextSecondary)
+                    }
+                }
+
+                Divider(color = BentoBorderSlate, modifier = Modifier.padding(vertical = 12.dp))
+
+                // Scrollable Chat Thread
+                LazyColumn(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .background(SoloDarkGrey, RoundedCornerShape(8.dp))
+                        .border(1.dp, BentoBorderSlate, RoundedCornerShape(8.dp))
+                        .padding(10.dp),
+                    state = listState,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(chatMessages) { msg ->
+                        val isSovereign = msg.sender == "sovereign"
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalAlignment = if (isSovereign) Alignment.End else Alignment.Start
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = (if (isSovereign) Arrangement.End else Arrangement.Start) as Arrangement.Horizontal,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    text = if (isSovereign) "SOVEREIGN SATYAM" else "SYSTEM ARCHITECT CORE",
+                                    color = if (isSovereign) SoloBlueAccent else SoloPurpleAccent,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = msg.timestamp,
+                                    color = SoloTextSecondary.copy(0.6f),
+                                    fontSize = 8.sp,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Box(
+                                modifier = Modifier
+                                    .clip(
+                                        RoundedCornerShape(
+                                            topStart = 12.dp,
+                                            topEnd = 12.dp,
+                                            bottomStart = if (isSovereign) 12.dp else 2.dp,
+                                            bottomEnd = if (isSovereign) 2.dp else 12.dp
+                                        )
+                                    )
+                                    .background(if (isSovereign) SoloBlueAccent.copy(0.15f) else SoloPurpleAccent.copy(0.15f))
+                                    .border(
+                                        width = 1.dp,
+                                        color = if (isSovereign) SoloBlueAccent.copy(0.4f) else SoloPurpleAccent.copy(0.4f),
+                                        shape = RoundedCornerShape(
+                                            topStart = 12.dp,
+                                            topEnd = 12.dp,
+                                            bottomStart = if (isSovereign) 12.dp else 2.dp,
+                                            bottomEnd = if (isSovereign) 2.dp else 12.dp
+                                        )
+                                    )
+                                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                            ) {
+                                Text(
+                                    text = msg.text,
+                                    color = SoloTextPrimary,
+                                    fontSize = 11.sp,
+                                    fontFamily = if (isSovereign) FontFamily.Default else FontFamily.Monospace
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Quick templates title
+                Text(
+                    text = "ADMIN QUICK COMMANDS:",
+                    color = SoloTextSecondary,
+                    fontSize = 8.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace,
+                    modifier = Modifier.padding(top = 10.dp, bottom = 4.dp)
+                )
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    val commands = listOf(
+                        "level up 5 times" to "Level Up ⚔️",
+                        "add 1000 gold" to "+1000 Gold 🪙",
+                        "add active quest 'Sovereign Trial'" to "New Quest 📜"
+                    )
+                    commands.forEach { (cmdText, label) ->
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(SoloDarkGrey)
+                                .border(1.dp, BentoBorderSlate, RoundedCornerShape(6.dp))
+                                .clickable(enabled = !adminProcessing) {
+                                    viewModel.sendAdminChatMessage(cmdText)
+                                }
+                                .padding(horizontal = 8.dp, vertical = 6.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = label,
+                                color = SoloPurpleAccent,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                    }
+                }
+
+                // Input field & Send button
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = inputMessage,
+                        onValueChange = { inputMessage = it },
+                        placeholder = { Text("Deploy system prompt...", color = SoloTextSecondary.copy(alpha = 0.5f), fontSize = 11.sp) },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = SoloPurpleAccent,
+                            unfocusedBorderColor = BentoBorderSlate,
+                            focusedTextColor = SoloTextPrimary,
+                            unfocusedTextColor = SoloTextPrimary
+                        ),
+                        textStyle = LocalTextStyle.current.copy(fontSize = 12.sp, fontFamily = FontFamily.Monospace),
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("admin_chatbot_text_field"),
+                        maxLines = 2,
+                        singleLine = true,
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                            imeAction = androidx.compose.ui.text.input.ImeAction.Send
+                        ),
+                        keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                            onSend = {
+                                if (inputMessage.isNotBlank()) {
+                                    viewModel.sendAdminChatMessage(inputMessage)
+                                    inputMessage = ""
+                                }
+                            }
+                        )
+                    )
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    if (adminProcessing) {
+                        CircularProgressIndicator(
+                            color = SoloPurpleAccent,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    } else {
+                        IconButton(
+                            onClick = {
+                                if (inputMessage.isNotBlank()) {
+                                    viewModel.sendAdminChatMessage(inputMessage)
+                                    inputMessage = ""
+                                }
+                            },
+                            modifier = Modifier
+                                .background(SoloPurpleAccent, CircleShape)
+                                .size(40.dp)
+                                .testTag("admin_chatbot_send_btn")
+                        ) {
+                            Icon(Icons.Default.Send, contentDescription = "Send", tint = Color.White, modifier = Modifier.size(18.dp))
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

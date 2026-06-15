@@ -382,6 +382,118 @@ object PreloadedWorkouts {
             baseSets = 3,
             baseReps = "45s speed",
             description = "Push up stance. Alternate driving knees explosively up to chest spot in rapid rhythmic pacing."
+        ),
+        PreloadedExercise(
+            name = "Incline Barbell Bench Press",
+            category = "Chest & Triceps",
+            equipmentRequired = "Full Gym",
+            baseSets = 4,
+            baseReps = "8-12",
+            description = "Similar to standard bench press but on a 30-45 degree incline bench, targeting superior chest fibers."
+        ),
+        PreloadedExercise(
+            name = "Decline Barbell Bench Press",
+            category = "Chest & Triceps",
+            equipmentRequired = "Full Gym",
+            baseSets = 3,
+            baseReps = "8-12",
+            description = "Similar to flat bench press but on a decline bench, prioritizing lower chest engagement."
+        ),
+        PreloadedExercise(
+            name = "Dumbbell Shrugs",
+            category = "Back & Biceps",
+            equipmentRequired = "Dumbbells Only",
+            baseSets = 3,
+            baseReps = "12-15",
+            description = "Hold heavy dumbbells by your sides. Pull shoulders up toward ears to build strong upper trapezius muscles."
+        ),
+        PreloadedExercise(
+            name = "Barbell Row (Yates Row)",
+            category = "Back & Biceps",
+            equipmentRequired = "Full Gym",
+            baseSets = 3,
+            baseReps = "8-12",
+            description = "Stand with a barbell underhand grip, hinge forward slightly, row barbell toward lower waist."
+        ),
+        PreloadedExercise(
+            name = "Face Pulls",
+            category = "Legs & Shoulders",
+            equipmentRequired = "Full Gym",
+            baseSets = 4,
+            baseReps = "15-20",
+            description = "Using high pulley rope attachment, pull rope towards your forehead/nose, splitting the rope to build rear delts."
+        ),
+        PreloadedExercise(
+            name = "Arnold Press",
+            category = "Legs & Shoulders",
+            equipmentRequired = "Dumbbells Only",
+            baseSets = 3,
+            baseReps = "8-12",
+            description = "Seated, hold dumbbells with palms facing you. Rotate hands as you press dumbbells up so palms face outward at the top."
+        ),
+        PreloadedExercise(
+            name = "Bulgarian Split Squat",
+            category = "Legs & Shoulders",
+            equipmentRequired = "Dumbbells Only",
+            baseSets = 3,
+            baseReps = "8-12 each",
+            description = "Place one foot back on a flat bench. Lower hips with single front leg to construct extreme strength and balance."
+        ),
+        PreloadedExercise(
+            name = "Leg Extensions",
+            category = "Legs & Shoulders",
+            equipmentRequired = "Full Gym",
+            baseSets = 3,
+            baseReps = "12-15",
+            description = "Sit in machine, lock shins behind rollers. Extend knees upward to isolate front quad muscles."
+        ),
+        PreloadedExercise(
+            name = "Seated Leg Curl",
+            category = "Legs & Shoulders",
+            equipmentRequired = "Full Gym",
+            baseSets = 3,
+            baseReps = "12-15",
+            description = "Sit in machine, flex knees downwards to contract and develop posterior hamstring fibers."
+        ),
+        PreloadedExercise(
+            name = "Preacher Bicep Curl",
+            category = "Back & Biceps",
+            equipmentRequired = "Full Gym",
+            baseSets = 3,
+            baseReps = "10-12",
+            description = "Rest arms against angled preacher bench pad. Hold EZ bar, curl upward fully to isolate biceps peak contraction."
+        ),
+        PreloadedExercise(
+            name = "Skull Crushers",
+            category = "Chest & Triceps",
+            equipmentRequired = "Full Gym",
+            baseSets = 3,
+            baseReps = "10-12",
+            description = "Lie on bench holding EZ bar/dumbbells. Move arms slight angle, bend elbows to lower bar to forehead, extend up."
+        ),
+        PreloadedExercise(
+            name = "Hanging Leg Raises",
+            category = "Abs & Cardio",
+            equipmentRequired = "Bodyweight",
+            baseSets = 3,
+            baseReps = "10-15",
+            description = "Hang straight from pull-up bar. Keeping legs fully straight, raise them to horizontal level using core."
+        ),
+        PreloadedExercise(
+            name = "Russian Twists",
+            category = "Abs & Cardio",
+            equipmentRequired = "Bodyweight",
+            baseSets = 3,
+            baseReps = "20-30",
+            description = "Sit with knees bent, feet slightly off the floor. Twist torso side to side, tapping floor with hands."
+        ),
+        PreloadedExercise(
+            name = "Burpees",
+            category = "Abs & Cardio",
+            equipmentRequired = "Bodyweight",
+            baseSets = 3,
+            baseReps = "12-15",
+            description = "Standard dynamic full body cardio mover. Perform a push-up, jump feet in, then explosively jump vertically."
         )
     )
 
