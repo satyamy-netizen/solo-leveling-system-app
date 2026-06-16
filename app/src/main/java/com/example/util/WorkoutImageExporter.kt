@@ -275,8 +275,10 @@ object WorkoutImageExporter {
     }
 
     // Fully scoped-storage safe image saver
-    fun saveBitmapToGallery(context: Context, bitmap: Bitmap, title: String): File? {
-        val filename = "HEVY_SHARE_${title.replace(" ", "_")}_${System.currentTimeMillis()}.png"
+    fun saveBitmapToGallery(context: Context, bitmap: Bitmap, title: String, isPng: Boolean = true): File? {
+        val extension = if (isPng) "png" else "jpg"
+        val mimeType = if (isPng) "image/png" else "image/jpeg"
+        val filename = "HEVY_SHARE_${title.replace(" ", "_")}_${System.currentTimeMillis()}.$extension"
         var outStream: OutputStream? = null
         var file: File? = null
 
@@ -284,7 +286,7 @@ object WorkoutImageExporter {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 val values = ContentValues().apply {
                     put(MediaStore.Images.Media.DISPLAY_NAME, filename)
-                    put(MediaStore.Images.Media.MIME_TYPE, "image/png")
+                    put(MediaStore.Images.Media.MIME_TYPE, mimeType)
                     put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/SoloLevelingTrack")
                     put(MediaStore.Images.Media.IS_PENDING, 1)
                 }
@@ -293,7 +295,8 @@ object WorkoutImageExporter {
                 if (imageUri != null) {
                     outStream = context.contentResolver.openOutputStream(imageUri)
                     if (outStream != null) {
-                        bitmap.compress(Bitmap.CompressFormat.PNG, 100, outStream)
+                        val compressFormat = if (isPng) Bitmap.CompressFormat.PNG else Bitmap.CompressFormat.JPEG
+                        bitmap.compress(compressFormat, 100, outStream)
                         values.clear()
                         values.put(MediaStore.Images.Media.IS_PENDING, 0)
                         context.contentResolver.update(imageUri, values, null, null)
@@ -304,7 +307,8 @@ object WorkoutImageExporter {
                 val dir = context.getExternalFilesDir(Environment.DIRECTORY_PICTURES) ?: context.filesDir
                 val imageFile = File(dir, filename)
                 outStream = FileOutputStream(imageFile)
-                bitmap.compress(Bitmap.CompressFormat.PNG, 100, outStream)
+                val compressFormat = if (isPng) Bitmap.CompressFormat.PNG else Bitmap.CompressFormat.JPEG
+                bitmap.compress(compressFormat, 100, outStream)
                 file = imageFile
             }
         } catch (e: Exception) {
@@ -318,6 +322,41 @@ object WorkoutImageExporter {
             }
         }
         return file
+    }
+
+    // Insert image into MediaStore to obtain a shareable Uri for both modern and older versions
+    fun insertImageToMediaStore(context: Context, bitmap: Bitmap, title: String, isPng: Boolean = true): android.net.Uri? {
+        val extension = if (isPng) "png" else "jpg"
+        val mimeType = if (isPng) "image/png" else "image/jpeg"
+        val filename = "SOLO_LEVEL_UP_${title.replace(" ", "_")}_${System.currentTimeMillis()}.$extension"
+        val values = ContentValues().apply {
+            put(MediaStore.Images.Media.DISPLAY_NAME, filename)
+            put(MediaStore.Images.Media.MIME_TYPE, mimeType)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/SoloLevelingTrack")
+                put(MediaStore.Images.Media.IS_PENDING, 1)
+            }
+        }
+
+        val contentResolver = context.contentResolver
+        val imageUri = contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+        if (imageUri != null) {
+            try {
+                contentResolver.openOutputStream(imageUri)?.use { outStream ->
+                    val compressFormat = if (isPng) Bitmap.CompressFormat.PNG else Bitmap.CompressFormat.JPEG
+                    bitmap.compress(compressFormat, 100, outStream)
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    values.clear()
+                    values.put(MediaStore.Images.Media.IS_PENDING, 0)
+                    contentResolver.update(imageUri, values, null, null)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                return null
+            }
+        }
+        return imageUri
     }
 
     fun generateLevelUpCard(

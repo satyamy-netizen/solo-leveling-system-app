@@ -35,6 +35,9 @@ interface SystemDao {
     @Query("SELECT * FROM daily_quest WHERE date = :date")
     fun getDailyQuests(date: String): Flow<List<DailyQuestEntity>>
 
+    @Query("SELECT * FROM daily_quest")
+    fun getAllDailyQuests(): Flow<List<DailyQuestEntity>>
+
     @Query("SELECT * FROM daily_quest WHERE date = :date")
     suspend fun getDailyQuestsOneShot(date: String): List<DailyQuestEntity>
 

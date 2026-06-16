@@ -26,6 +26,7 @@ class SystemViewModel(application: Application) : AndroidViewModel(application) 
     val userProfile = MutableStateFlow<UserProfileEntity?>(null)
     val bodyFocusSplit = MutableStateFlow<List<BodyFocusEntity>>(emptyList())
     val dailyQuests = MutableStateFlow<List<DailyQuestEntity>>(emptyList())
+    val allDailyQuestsHistory = MutableStateFlow<List<DailyQuestEntity>>(emptyList())
     val workoutLogs = MutableStateFlow<List<WorkoutLogEntity>>(emptyList())
     val bodyMeasurements = MutableStateFlow<List<BodyMeasurementEntity>>(emptyList())
     val earnedBadges = MutableStateFlow<List<BadgeEntity>>(emptyList())
@@ -50,6 +51,9 @@ class SystemViewModel(application: Application) : AndroidViewModel(application) 
             0f
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0f)
+
+    // --- Profile Photo State ---
+    val profilePhotoUri = MutableStateFlow<String?>(null)
 
     // --- Custom App Tray Name state ---
     val customAppTrayName = MutableStateFlow("Solo Leveling Fitness")
@@ -116,6 +120,93 @@ class SystemViewModel(application: Application) : AndroidViewModel(application) 
         showLevelUpAnimation.value = null
     }
 
+    // Real-time network and system alerts / reminders notification states
+    val isNetworkAvailable = MutableStateFlow<Boolean>(true)
+    val systemAlerts = MutableStateFlow<List<SystemAlert>>(emptyList())
+
+    fun registerConnectivityCheck() {
+        try {
+            val connectivityManager = getApplication<Application>().getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+            val activeNetwork = connectivityManager.activeNetwork
+            val caps = connectivityManager.getNetworkCapabilities(activeNetwork)
+            isNetworkAvailable.value = caps?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+
+            updateOfflineAlert(isNetworkAvailable.value)
+
+            val request = android.net.NetworkRequest.Builder()
+                .addCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                .build()
+            connectivityManager.registerNetworkCallback(request, object : android.net.ConnectivityManager.NetworkCallback() {
+                override fun onAvailable(network: android.net.Network) {
+                    isNetworkAvailable.value = true
+                    updateOfflineAlert(true)
+                }
+                override fun onLost(network: android.net.Network) {
+                    isNetworkAvailable.value = false
+                    updateOfflineAlert(false)
+                }
+            })
+        } catch (e: Exception) {
+            e.printStackTrace()
+            isNetworkAvailable.value = true
+        }
+    }
+
+    private fun updateOfflineAlert(online: Boolean) {
+        val offlineAlertId = "system_offline_alert"
+        val existing = systemAlerts.value
+        if (!online) {
+            if (existing.none { it.id == offlineAlertId }) {
+                val alert = SystemAlert(
+                    id = offlineAlertId,
+                    message = "🌐 SYSTEM OFFLINE CACHE ACTIVE: Dashboard and Quest lines fully supported by local Room database memory.",
+                    type = "warning"
+                )
+                systemAlerts.value = listOf(alert) + existing
+            }
+        } else {
+            systemAlerts.value = existing.filter { it.id != offlineAlertId }
+        }
+    }
+
+    fun updateQuestIncompleteAlert(quests: List<DailyQuestEntity>) {
+        val alertId = "quest_incomplete_alert"
+        val existing = systemAlerts.value
+        val hasIncomplete = quests.isNotEmpty() && quests.any { !it.isCompleted }
+        if (hasIncomplete) {
+            if (existing.none { it.id == alertId }) {
+                val alert = SystemAlert(
+                    id = alertId,
+                    message = "🚨 DAILY QUEST OUTSTANDING: S-Class workout list has pending challenges. Clear them to earn XP!",
+                    type = "quest"
+                )
+                systemAlerts.value = existing + alert
+            }
+        } else {
+            systemAlerts.value = existing.filter { it.id != alertId }
+        }
+    }
+
+    fun initializeDefaultAlerts() {
+        val defaults = listOf(
+            SystemAlert(
+                id = "announcement_s_class",
+                message = "🔥 SYSTEM STATUS PROTOCOL: High Intensity lifts generate up to 2.5x more status points.",
+                type = "notice"
+            ),
+            SystemAlert(
+                id = "announcement_overload",
+                message = "🏋️ ACTION REMINDER: Log your Bench Press or Squat sets continuously to analyze active performance.",
+                type = "reminder"
+            )
+        )
+        systemAlerts.value = systemAlerts.value + defaults
+    }
+
+    fun dismissSystemAlert(alertId: String) {
+        systemAlerts.value = systemAlerts.value.filter { it.id != alertId }
+    }
+
     init {
         // Load custom app tray name preference on startup
         try {
@@ -123,9 +214,13 @@ class SystemViewModel(application: Application) : AndroidViewModel(application) 
             customAppTrayName.value = sharedPrefs.getString("custom_app_tray_name", "Solo Leveling Fitness") ?: "Solo Leveling Fitness"
             monthlyGoalSessions.value = sharedPrefs.getInt("monthly_goal_sessions", 12)
             monthlyGoalVolume.value = sharedPrefs.getInt("monthly_goal_volume", 10000)
+            profilePhotoUri.value = sharedPrefs.getString("profile_photo_uri", null)
         } catch (e: Exception) {
             e.printStackTrace()
         }
+
+        registerConnectivityCheck()
+        initializeDefaultAlerts()
 
         val database = AppDatabase.getDatabase(application)
         repository = SystemRepository(database.systemDao())
@@ -253,6 +348,12 @@ class SystemViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch {
             repository.earnedBadges.collect { badges ->
                 earnedBadges.value = badges
+            }
+        }
+
+        viewModelScope.launch {
+            repository.allDailyQuestsHistory.collect { history ->
+                allDailyQuestsHistory.value = history
             }
         }
 
@@ -738,6 +839,7 @@ class SystemViewModel(application: Application) : AndroidViewModel(application) 
                     generateDailyQuestsForDate(today, profile?.intensity ?: "Medium")
                 } else {
                     dailyQuests.value = quests
+                    updateQuestIncompleteAlert(quests)
                 }
             }
         }
@@ -891,7 +993,7 @@ class SystemViewModel(application: Application) : AndroidViewModel(application) 
         showWorkoutCompletionDialog.value = false
     }
 
-    fun downloadHevyWorkoutCard(context: android.content.Context) {
+    fun downloadHevyWorkoutCard(context: android.content.Context, isPng: Boolean = true) {
         val profile = userProfile.value
         val name = profile?.name ?: "Hunter"
         val date = getTodayDateString()
@@ -911,7 +1013,7 @@ class SystemViewModel(application: Application) : AndroidViewModel(application) 
                 xpEarned = totalXp,
                 goldEarned = totalGold
             )
-            val fileSaved = com.example.util.WorkoutImageExporter.saveBitmapToGallery(context, bitmap, "Workout_Achievements")
+            val fileSaved = com.example.util.WorkoutImageExporter.saveBitmapToGallery(context, bitmap, "Workout_Achievements", isPng)
             if (fileSaved != null || android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
                 notifyMsg("Hevy Share Card successfully saved to Gallery / Pictures directory!", "achievement")
             } else {
@@ -922,7 +1024,49 @@ class SystemViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun downloadLevelUpCard(context: android.content.Context, level: Int) {
+    fun shareHevyWorkoutCard(context: android.content.Context, isPng: Boolean = true) {
+        val profile = userProfile.value
+        val name = profile?.name ?: "Hunter"
+        val date = getTodayDateString()
+        val todayLogs = workoutLogs.value.filter { it.date == date }
+        if (todayLogs.isEmpty()) {
+            notifyMsg("No exercises completed today yet! Log a workout first.", "neutral")
+            return
+        }
+
+        try {
+            val totalXp = todayLogs.sumOf { it.xpEarned }
+            val totalGold = todayLogs.size * 30
+            val bitmap = com.example.util.WorkoutImageExporter.generateWorkoutSummaryCard(
+                username = name,
+                date = date,
+                logs = todayLogs,
+                xpEarned = totalXp,
+                goldEarned = totalGold
+            )
+            val imageUri = com.example.util.WorkoutImageExporter.insertImageToMediaStore(context, bitmap, "Workout_Achievements", isPng)
+            if (imageUri != null) {
+                val textShare = "⚡ S-RANK HUNTER STATUS REGISTERED! ⚡\nLogged ${todayLogs.size} completed exercises today!\nDownloaded standard ratification summary."
+                val sendIntent = android.content.Intent().apply {
+                    action = android.content.Intent.ACTION_SEND
+                    putExtra(android.content.Intent.EXTRA_STREAM, imageUri)
+                    putExtra(android.content.Intent.EXTRA_TEXT, textShare)
+                    type = if (isPng) "image/png" else "image/jpeg"
+                    addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                val shareIntent = android.content.Intent.createChooser(sendIntent, "SHARE WORKOUT RECORD")
+                shareIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(shareIntent)
+                notifyMsg("Workout summary shared successfully!", "achievement")
+            } else {
+                notifyMsg("Could not generate shareable image URI.", "warning")
+            }
+        } catch (e: Exception) {
+            notifyMsg("Workout card sharing failed: ${e.message}", "warning")
+        }
+    }
+
+    fun downloadLevelUpCard(context: android.content.Context, level: Int, isPng: Boolean = true) {
         try {
             val profile = userProfile.value
             val name = profile?.name ?: "Hunter"
@@ -932,7 +1076,7 @@ class SystemViewModel(application: Application) : AndroidViewModel(application) 
                 level = level,
                 statsText = statsText
             )
-            val fileSaved = com.example.util.WorkoutImageExporter.saveBitmapToGallery(context, bitmap, "Level_Up_Ascension")
+            val fileSaved = com.example.util.WorkoutImageExporter.saveBitmapToGallery(context, bitmap, "Level_Up_Ascension", isPng)
             if (fileSaved != null || android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
                 notifyMsg("S-Rank Level-Up Card successfully saved to Gallery / Pictures directory!", "achievement")
             } else {
@@ -943,22 +1087,35 @@ class SystemViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun shareLevelUpCard(context: android.content.Context, level: Int) {
+    fun shareLevelUpCard(context: android.content.Context, level: Int, isPng: Boolean = true) {
         try {
             val profile = userProfile.value
+            val name = profile?.name ?: "Hunter"
             val statsText = "STR: ${profile?.strength ?: 10} | AGI: ${profile?.agility ?: 10} | INT: ${profile?.intelligence ?: 10}"
-            val textShare = "⚡ SHADOW MONARCH RE-AWAKEN: ASCENDED TO LEVEL $level! ⚡\nMy current status: $statsText\nDownload the app to register your coordinates!"
+            val bitmap = com.example.util.WorkoutImageExporter.generateLevelUpCard(
+                username = name,
+                level = level,
+                statsText = statsText
+            )
+            val imageUri = com.example.util.WorkoutImageExporter.insertImageToMediaStore(context, bitmap, "Level_Up_Ascension", isPng)
             
-            val sendIntent = android.content.Intent().apply {
-                action = android.content.Intent.ACTION_SEND
-                putExtra(android.content.Intent.EXTRA_TEXT, textShare)
-                type = "text/plain"
+            if (imageUri != null) {
+                val textShare = "⚡ SHADOW MONARCH RE-AWAKEN: ASCENDED TO LEVEL $level! ⚡\nMy current status: $statsText"
+                val sendIntent = android.content.Intent().apply {
+                    action = android.content.Intent.ACTION_SEND
+                    putExtra(android.content.Intent.EXTRA_STREAM, imageUri)
+                    putExtra(android.content.Intent.EXTRA_TEXT, textShare)
+                    type = if (isPng) "image/png" else "image/jpeg"
+                    addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                val shareIntent = android.content.Intent.createChooser(sendIntent, "SHARE ASCENSION DECREE")
+                shareIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(shareIntent)
+                
+                notifyMsg("Ascension Level-Up Image shared successfully!", "achievement")
+            } else {
+                notifyMsg("Could not generate shareable image URI.", "warning")
             }
-            val shareIntent = android.content.Intent.createChooser(sendIntent, "SHARE ASCENSION DECREE")
-            shareIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-            context.startActivity(shareIntent)
-            
-            notifyMsg("Ascension share intent dispatched successfully!", "achievement")
         } catch (e: Exception) {
             notifyMsg("Ascension share failed: ${e.message}", "warning")
         }
@@ -1016,8 +1173,8 @@ class SystemViewModel(application: Application) : AndroidViewModel(application) 
                 val mediaType = "application/json; charset=utf-8".toMediaType()
                 val requestBody = requestJson.toString().toRequestBody(mediaType)
                 
-                // Using low-latency model gemini-1.5-flash
-                val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$apiKey"
+                // Using low-latency model gemini-3.5-flash
+                val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=$apiKey"
                 
                 val request = okhttp3.Request.Builder()
                     .url(url)
@@ -1317,6 +1474,33 @@ class SystemViewModel(application: Application) : AndroidViewModel(application) 
                 notifyMsg("NEW BADGE AWARDED: S-Rank Overlord", "achievement")
                 syncEverythingToCloud()
             }
+
+            // 8. 10 Workouts Completed Badge
+            if (allLogs.size >= 10 && !existingIds.contains("WORKOUTS_10")) {
+                repository.insertBadge(BadgeEntity(
+                    badgeId = "WORKOUTS_10",
+                    name = "Veteran Monarch",
+                    description = "Milestone: Completed 10 workouts under sovereign surveillance.",
+                    earnedDate = today,
+                    iconName = "emoji_events"
+                ))
+                notifyMsg("NEW BADGE AWARDED: Veteran Monarch", "achievement")
+                syncEverythingToCloud()
+            }
+
+            // 9. Personal Best Achieved Badge
+            val hasCompoundPB = currentProfile.benchPress > 0f || currentProfile.squat > 0f || currentProfile.deadlift > 0f || currentProfile.overheadPress > 0f
+            if (hasCompoundPB && !existingIds.contains("PB_ACHIEVED")) {
+                repository.insertBadge(BadgeEntity(
+                    badgeId = "PB_ACHIEVED",
+                    name = "Limit Break",
+                    description = "Milestone: Achieved a personal best standard on a compound lift parameter.",
+                    earnedDate = today,
+                    iconName = "bolt"
+                ))
+                notifyMsg("NEW BADGE AWARDED: Limit Break", "achievement")
+                syncEverythingToCloud()
+            }
         }
     }
 
@@ -1393,7 +1577,7 @@ class SystemViewModel(application: Application) : AndroidViewModel(application) 
 
                     val mediaType = "application/json; charset=utf-8".toMediaType()
                     val requestBody = requestJson.toString().toRequestBody(mediaType)
-                    val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$apiKey"
+                    val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=$apiKey"
 
                     val request = okhttp3.Request.Builder()
                         .url(url)
@@ -1535,6 +1719,13 @@ class SystemViewModel(application: Application) : AndroidViewModel(application) 
         notifyMsg("Target Special Goals updated perfectly! New training schedule initialized.", "achievement")
     }
 
+    fun updateProfilePhoto(uri: String) {
+        profilePhotoUri.value = uri
+        val sharedPrefs = getApplication<Application>().getSharedPreferences("solo_leveling_prefs", android.content.Context.MODE_PRIVATE)
+        sharedPrefs.edit().putString("profile_photo_uri", uri).apply()
+        notifyMsg("Profile photo updated successfully!", "achievement")
+    }
+
     val adminProcessing = MutableStateFlow(false)
     val adminResponseLog = MutableStateFlow<List<String>>(emptyList())
     val adminChatMessages = MutableStateFlow<List<AdminChatMessage>>(listOf(
@@ -1646,7 +1837,7 @@ class SystemViewModel(application: Application) : AndroidViewModel(application) 
 
                     val mediaType = "application/json; charset=utf-8".toMediaType()
                     val requestBody = requestJson.toString().toRequestBody(mediaType)
-                    val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$apiKey"
+                    val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=$apiKey"
 
                     val request = okhttp3.Request.Builder()
                         .url(url)
@@ -1663,11 +1854,18 @@ class SystemViewModel(application: Application) : AndroidViewModel(application) 
                         }
                     }
 
-                    val cleanJsonStr = result.trim()
-                        .removePrefix("```json")
-                        .removePrefix("```")
-                        .removeSuffix("```")
-                        .trim()
+                    // Highly resilient JSON extractor that grabs the first {...} block to avoid conversational prefix/suffix issues
+                    val startIdx = result.indexOf('{')
+                    val endIdx = result.lastIndexOf('}')
+                    val cleanJsonStr = if (startIdx != -1 && endIdx != -1 && endIdx > startIdx) {
+                        result.substring(startIdx, endIdx + 1).trim()
+                    } else {
+                        result.trim()
+                            .removePrefix("```json")
+                            .removePrefix("```")
+                            .removeSuffix("```")
+                            .trim()
+                    }
 
                     val jsonResult = org.json.JSONObject(cleanJsonStr)
                     val explanation = jsonResult.optString("explanation", "Sovereign request executed.")
@@ -1828,7 +2026,7 @@ class SystemViewModel(application: Application) : AndroidViewModel(application) 
 
                     val mediaType = "application/json; charset=utf-8".toMediaType()
                     val requestBody = requestJson.toString().toRequestBody(mediaType)
-                    val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$apiKey"
+                    val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=$apiKey"
 
                     val request = okhttp3.Request.Builder()
                         .url(url)
@@ -1845,11 +2043,18 @@ class SystemViewModel(application: Application) : AndroidViewModel(application) 
                         }
                     }
 
-                    val cleanJsonStr = result.trim()
-                        .removePrefix("```json")
-                        .removePrefix("```")
-                        .removeSuffix("```")
-                        .trim()
+                    // Highly resilient JSON extractor that grabs the first {...} block to avoid conversational prefix/suffix issues
+                    val startIdx = result.indexOf('{')
+                    val endIdx = result.lastIndexOf('}')
+                    val cleanJsonStr = if (startIdx != -1 && endIdx != -1 && endIdx > startIdx) {
+                        result.substring(startIdx, endIdx + 1).trim()
+                    } else {
+                        result.trim()
+                            .removePrefix("```json")
+                            .removePrefix("```")
+                            .removeSuffix("```")
+                            .trim()
+                    }
 
                     val jsonResult = org.json.JSONObject(cleanJsonStr)
                     val explanation = jsonResult.optString("explanation", "Processed configuration update.")
@@ -1947,4 +2152,11 @@ data class ActiveWorkoutExercise(
     val isDone: Boolean = false,
     val setsList: List<ActiveWorkoutSet> = emptyList(),
     val aiIntensity: String = "Medium"
+)
+
+data class SystemAlert(
+    val id: String,
+    val message: String,
+    val type: String, // "warning", "reminder", "quest", "success", "notice"
+    val timestamp: Long = System.currentTimeMillis()
 )

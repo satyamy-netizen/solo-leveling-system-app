@@ -37,6 +37,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.result.PickVisualMediaRequest
+import coil.compose.AsyncImage
 import com.example.data.model.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -49,6 +53,72 @@ import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
 import com.example.ui.theme.*
 import java.util.Calendar
+
+@Composable
+fun CyberpunkEntranceContainer(
+    delayMillis: Int = 0,
+    content: @Composable () -> Unit
+) {
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        delay(delayMillis.toLong())
+        visible = true
+    }
+    AnimatedVisibility(
+        visible = visible,
+        enter = slideInVertically(
+            initialOffsetY = { it / 3 },
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioMediumBouncy,
+                stiffness = Spring.StiffnessLow
+            )
+        ) + fadeIn(
+            animationSpec = tween(durationMillis = 400)
+        ),
+        exit = fadeOut()
+    ) {
+        content()
+    }
+}
+
+@Composable
+fun Modifier.cyberpunkHoverCard(
+    onCardClick: (() -> Unit)? = null,
+    testTag: String? = null
+): Modifier {
+    var isPressed by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.96f else 1.0f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "cyber_scale"
+    )
+
+    val baseModifier = if (onCardClick != null) {
+        this.pointerInput(onCardClick) {
+            detectTapGestures(
+                onPress = {
+                    isPressed = true
+                    tryAwaitRelease()
+                    isPressed = false
+                },
+                onTap = { onCardClick() }
+            )
+        }
+    } else {
+        this
+    }
+
+    return baseModifier
+        .graphicsLayer(
+            scaleX = scale,
+            scaleY = scale
+        ).let { mod ->
+            if (testTag != null) mod.testTag(testTag) else mod
+        }
+}
 
 @Composable
 fun SystemMainApp(viewModel: SystemViewModel) {
@@ -1188,21 +1258,30 @@ fun DashboardLayout(viewModel: SystemViewModel, activeTab: String) {
             }
         }
     ) { padding ->
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(bottom = padding.calculateBottomPadding())
         ) {
-            when (activeTab) {
-                "DASHBOARD" -> DashboardScreen(viewModel)
-                "FOCUS_MANAGER" -> FocusSplitManagerScreen(viewModel)
-                "AI_TRAINER" -> AiTrainerScreen(viewModel)
-                "WORKOUTS" -> WorkoutsScreen(viewModel)
-                "ANALYTICS" -> AnalyticsScreen(viewModel)
-                "LEADERBOARD" -> LeaderboardScreen(viewModel)
-                "OWNER" -> OwnerAdminScreen(viewModel)
-                "PROFILE" -> ProfileScreen(viewModel)
-                "MANAGE_EXERCISES" -> ManageExercisesScreen(viewModel)
+            // Real-Time Urgent alerts or training reminders
+            RealtimeSystemAlertsBanner(viewModel = viewModel)
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+            ) {
+                when (activeTab) {
+                    "DASHBOARD" -> DashboardScreen(viewModel)
+                    "FOCUS_MANAGER" -> FocusSplitManagerScreen(viewModel)
+                    "AI_TRAINER" -> AiTrainerScreen(viewModel)
+                    "WORKOUTS" -> WorkoutsScreen(viewModel)
+                    "ANALYTICS" -> AnalyticsScreen(viewModel)
+                    "LEADERBOARD" -> LeaderboardScreen(viewModel)
+                    "OWNER" -> OwnerAdminScreen(viewModel)
+                    "PROFILE" -> ProfileScreen(viewModel)
+                    "MANAGE_EXERCISES" -> ManageExercisesScreen(viewModel)
+                }
             }
         }
     }
@@ -1218,6 +1297,7 @@ fun DashboardScreen(viewModel: SystemViewModel) {
     val badgesList by viewModel.earnedBadges.collectAsStateWithLifecycle()
     val bodyFocusSplit by viewModel.bodyFocusSplit.collectAsStateWithLifecycle()
     val lastDayWeight by viewModel.lastDayTotalWeight.collectAsStateWithLifecycle()
+    val profilePhotoUri by viewModel.profilePhotoUri.collectAsStateWithLifecycle()
     var showTitlesDialog by remember { mutableStateOf(false) }
 
     Column(
@@ -1342,117 +1422,129 @@ fun DashboardScreen(viewModel: SystemViewModel) {
         Spacer(modifier = Modifier.height(8.dp))
 
         // 2. PRIMARY QUEST CARD (Large level snapshot card styled with deep shadows/glows)
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 8.dp)
-                .border(2.dp, BentoBorderSky, RoundedCornerShape(16.dp)),
-            colors = CardDefaults.cardColors(containerColor = SoloCardBg),
-            shape = RoundedCornerShape(16.dp)
-        ) {
-            Box(
+        CyberpunkEntranceContainer(delayMillis = 0) {
+            Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp)
+                    .padding(vertical = 8.dp)
+                    .border(2.dp, BentoBorderSky, RoundedCornerShape(16.dp))
+                    .cyberpunkHoverCard(onCardClick = { viewModel.currentScreen.value = "PROFILE" }),
+                colors = CardDefaults.cardColors(containerColor = SoloCardBg),
+                shape = RoundedCornerShape(16.dp)
             ) {
-                // Profile Photo button that acts as an entrypoint to the user's Profile
                 Box(
                     modifier = Modifier
-                        .size(38.dp)
-                        .clip(CircleShape)
-                        .background(SoloDarkGrey)
-                        .border(1.5.dp, SoloBlueAccent, CircleShape)
-                        .clickable { viewModel.currentScreen.value = "PROFILE" }
-                        .align(Alignment.TopEnd)
-                        .testTag("profile_photo_button"),
-                    contentAlignment = Alignment.Center
+                        .fillMaxWidth()
+                        .padding(16.dp)
                 ) {
-                    Icon(
-                        imageVector = androidx.compose.material.icons.Icons.Default.Person,
-                        contentDescription = "Visit Hunter Profile",
-                        tint = SoloBlueAccent,
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
-
-                Column {
-                    Text(
-                        text = "ACTIVE EVOLUTION PROTOCOL",
-                        color = SoloBlueAccent,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace,
-                        letterSpacing = 1.sp
-                    )
-                    Text(
-                        text = "[ PREPARING TO BECOME STRONG ]",
-                        color = SoloTextPrimary,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = (-0.2).sp,
-                        modifier = Modifier.padding(vertical = 4.dp)
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "PROGRESSION LEVEL TRANSITION",
-                            color = SoloTextSecondary,
-                            fontSize = 10.sp,
-                            fontFamily = FontFamily.Monospace
-                        )
-                        val pct = (xpRatio * 100).toInt()
-                        Text(
-                            text = "$pct%",
-                            color = SoloBlueAccent,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    // Custom XP Progress Bar (Large elegant progress line)
+                    // Profile Photo button that acts as an entrypoint to the user's Profile
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .height(10.dp)
+                            .size(38.dp)
                             .clip(CircleShape)
                             .background(SoloDarkGrey)
+                            .border(1.5.dp, SoloBlueAccent, CircleShape)
+                            .clickable { viewModel.currentScreen.value = "PROFILE" }
+                            .align(Alignment.TopEnd)
+                            .testTag("profile_photo_button"),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth(xpRatio)
-                                .fillMaxHeight()
-                                .clip(CircleShape)
-                                .background(
-                                    Brush.horizontalGradient(
-                                        listOf(SoloBlueAccent, SoloPurpleAccent)
-                                    )
-                                )
-                        )
+                        if (!profilePhotoUri.isNullOrEmpty()) {
+                            AsyncImage(
+                                model = profilePhotoUri,
+                                contentDescription = "Visit Hunter Profile",
+                                modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                            )
+                        } else {
+                            Icon(
+                                imageVector = androidx.compose.material.icons.Icons.Default.Person,
+                                contentDescription = "Visit Hunter Profile",
+                                tint = SoloBlueAccent,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
                     }
 
-                    Spacer(modifier = Modifier.height(14.dp))
+                    Column {
+                        Text(
+                            text = "ACTIVE EVOLUTION PROTOCOL",
+                            color = SoloBlueAccent,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace,
+                            letterSpacing = 1.sp
+                        )
+                        Text(
+                            text = "[ PREPARING TO BECOME STRONG ]",
+                            color = SoloTextPrimary,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            letterSpacing = (-0.2).sp,
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        )
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.FitnessCenter, contentDescription = "Last Day Weight", tint = SoloPurpleAccent, modifier = Modifier.size(16.dp))
-                            Text(text = " Last Lift: ${String.format("%.1f", lastDayWeight)} kg", color = SoloPurpleAccent, fontWeight = FontWeight.Bold, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "PROGRESSION LEVEL TRANSITION",
+                                color = SoloTextSecondary,
+                                fontSize = 10.sp,
+                                fontFamily = FontFamily.Monospace
+                            )
+                            val pct = (xpRatio * 100).toInt()
+                            Text(
+                                text = "$pct%",
+                                color = SoloBlueAccent,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace
+                            )
                         }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.LocalFireDepartment, contentDescription = "Active Streak", tint = SoloDanger, modifier = Modifier.size(16.dp))
-                            Text(text = " Streak: ${user.streak} Days", color = SoloDanger, fontWeight = FontWeight.Bold, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        // Custom XP Progress Bar (Large elegant progress line)
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(10.dp)
+                                .clip(CircleShape)
+                                .background(SoloDarkGrey)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth(xpRatio)
+                                    .fillMaxHeight()
+                                    .clip(CircleShape)
+                                    .background(
+                                        Brush.horizontalGradient(
+                                            listOf(SoloBlueAccent, SoloPurpleAccent)
+                                        )
+                                    )
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.FitnessCenter, contentDescription = "Last Day Weight", tint = SoloPurpleAccent, modifier = Modifier.size(16.dp))
+                                Text(text = " Last Lift: ${String.format("%.1f", lastDayWeight)} kg", color = SoloPurpleAccent, fontWeight = FontWeight.Bold, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.LocalFireDepartment, contentDescription = "Active Streak", tint = SoloDanger, modifier = Modifier.size(16.dp))
+                                Text(text = " Streak: ${user.streak} Days", color = SoloDanger, fontWeight = FontWeight.Bold, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                            }
                         }
                     }
                 }
@@ -1475,120 +1567,130 @@ fun DashboardScreen(viewModel: SystemViewModel) {
             val focusPart = todayFocus?.focusPart ?: "Chest & Triceps"
 
             // Today's Focus Card (Left half-column)
-            Card(
-                modifier = Modifier
-                    .weight(1.2f)
-                    .height(130.dp)
-                    .border(1.dp, BentoBorderSlate, RoundedCornerShape(16.dp)),
-                colors = CardDefaults.cardColors(containerColor = SoloDarkGrey),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.linearGradient(
-                                colors = listOf(SoloDarkGrey, Color(0xFF0F172A).copy(alpha = 0.6f))
-                            )
-                        )
-                        .padding(12.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.SpaceBetween
+            Box(modifier = Modifier.weight(1.2f)) {
+                CyberpunkEntranceContainer(delayMillis = 100) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(130.dp)
+                            .border(1.dp, BentoBorderSlate, RoundedCornerShape(16.dp))
+                            .cyberpunkHoverCard(onCardClick = { viewModel.currentScreen.value = "WORKOUTS" }),
+                        colors = CardDefaults.cardColors(containerColor = SoloDarkGrey),
+                        shape = RoundedCornerShape(16.dp)
                     ) {
-                        Column {
-                            Text(
-                                text = "TODAY'S FOCUS",
-                                color = SoloBlueAccent.copy(alpha = 0.8f),
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace,
-                                letterSpacing = 0.5.sp
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = focusPart.uppercase(),
-                                color = SoloTextPrimary,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Black,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                                lineHeight = 17.sp
-                            )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.linearGradient(
+                                        colors = listOf(SoloDarkGrey, Color(0xFF0F172A).copy(alpha = 0.6f))
+                                    )
+                                )
+                                .padding(12.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier.fillMaxSize(),
+                                verticalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column {
+                                    Text(
+                                        text = "TODAY'S FOCUS",
+                                        color = SoloBlueAccent.copy(alpha = 0.8f),
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = FontFamily.Monospace,
+                                        letterSpacing = 0.5.sp
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = focusPart.uppercase(),
+                                        color = SoloTextPrimary,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Black,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis,
+                                        lineHeight = 17.sp
+                                    )
+                                }
+                                Text(
+                                    text = "Intensity: ${user.intensity}-Grade",
+                                    color = SoloTextSecondary,
+                                    fontSize = 10.sp,
+                                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                                )
+                            }
                         }
-                        Text(
-                            text = "Intensity: ${user.intensity}-Grade",
-                            color = SoloTextSecondary,
-                            fontSize = 10.sp,
-                            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
-                        )
                     }
                 }
             }
 
             // Global Rank Mini Card (Right half-column)
-            Card(
-                modifier = Modifier
-                    .weight(1f)
-                    .height(130.dp)
-                    .border(1.dp, BentoBorderSlate, RoundedCornerShape(16.dp)),
-                colors = CardDefaults.cardColors(containerColor = SoloDarkGrey),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(12.dp),
-                    verticalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+            Box(modifier = Modifier.weight(1f)) {
+                CyberpunkEntranceContainer(delayMillis = 150) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(130.dp)
+                            .border(1.dp, BentoBorderSlate, RoundedCornerShape(16.dp))
+                            .cyberpunkHoverCard(onCardClick = { viewModel.currentScreen.value = "LEADERBOARD" }),
+                        colors = CardDefaults.cardColors(containerColor = SoloDarkGrey),
+                        shape = RoundedCornerShape(16.dp)
                     ) {
-                        Text(
-                            text = "GLOBAL RANK",
-                            color = SoloTextSecondary,
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace
-                        )
-                        Text(
-                            text = "#1,204",
-                            color = SoloBlueAccent,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace
-                        )
-                    }
-
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Row(
+                        Column(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .background(SoloBlueAccent.copy(alpha = 0.1f), RoundedCornerShape(2.dp))
-                                .border(width = 0.5.dp, color = SoloBlueAccent.copy(alpha = 0.3f), shape = RoundedCornerShape(2.dp))
-                                .padding(horizontal = 4.dp, vertical = 2.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                                .fillMaxSize()
+                                .padding(12.dp),
+                            verticalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text(text = user.name, color = SoloTextPrimary, fontSize = 9.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                            Text(text = "LV.${user.level}", color = SoloBlueAccent, fontSize = 9.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
-                        }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "GLOBAL RANK",
+                                    color = SoloTextSecondary,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                                Text(
+                                    text = "#1,204",
+                                    color = SoloBlueAccent,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            }
 
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 4.dp, vertical = 1.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(text = "Cha-Hae", color = SoloTextSecondary.copy(alpha = 0.7f), fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                            Text(text = "LV.81", color = SoloTextSecondary.copy(alpha = 0.7f), fontSize = 9.sp, fontFamily = FontFamily.Monospace)
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(SoloBlueAccent.copy(alpha = 0.1f), RoundedCornerShape(2.dp))
+                                        .border(width = 0.5.dp, color = SoloBlueAccent.copy(alpha = 0.3f), shape = RoundedCornerShape(2.dp))
+                                        .padding(horizontal = 4.dp, vertical = 2.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(text = user.name, color = SoloTextPrimary, fontSize = 9.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                                    Text(text = "LV.${user.level}", color = SoloBlueAccent, fontSize = 9.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                                }
+
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 4.dp, vertical = 1.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(text = "Cha-Hae", color = SoloTextSecondary.copy(alpha = 0.7f), fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                                    Text(text = "LV.81", color = SoloTextSecondary.copy(alpha = 0.7f), fontSize = 9.sp, fontFamily = FontFamily.Monospace)
+                                }
+                            }
                         }
                     }
                 }
@@ -1596,102 +1698,106 @@ fun DashboardScreen(viewModel: SystemViewModel) {
         }
 
         // 4. SECOND BENTO ROW (Earned Titles & Special Monthly Goals)
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(105.dp)
-                .padding(vertical = 4.dp)
-                .border(1.dp, BentoBorderSlate, RoundedCornerShape(16.dp))
-                .clickable { showTitlesDialog = true },
-            colors = CardDefaults.cardColors(containerColor = SoloDarkGrey),
-            shape = RoundedCornerShape(16.dp)
-        ) {
-            Column(
+        CyberpunkEntranceContainer(delayMillis = 200) {
+            Card(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(12.dp)
+                    .fillMaxWidth()
+                    .height(105.dp)
+                    .padding(vertical = 4.dp)
+                    .border(1.dp, BentoBorderSlate, RoundedCornerShape(16.dp))
+                    .cyberpunkHoverCard(onCardClick = { showTitlesDialog = true }),
+                colors = CardDefaults.cardColors(containerColor = SoloDarkGrey),
+                shape = RoundedCornerShape(16.dp)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(12.dp)
                 ) {
-                    Text(
-                        text = "EARNED PRESTIGE TITLES",
-                        color = SoloPurpleAccent,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace
-                    )
-                    Text(
-                        text = "VIEW ALL ⚡",
-                        color = SoloBlueAccent,
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace
-                    )
-                }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "EARNED PRESTIGE TITLES",
+                            color = SoloPurpleAccent,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace
+                        )
+                        Text(
+                            text = "VIEW ALL ⚡",
+                            color = SoloBlueAccent,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    if (badgesList.isEmpty()) {
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .background(SoloBlueAccent.copy(alpha = 0.05f))
-                                .border(1.dp, SoloBlueAccent.copy(alpha = 0.2f), RoundedCornerShape(6.dp)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Box(modifier = Modifier.size(10.dp).background(SoloBlueAccent.copy(alpha = 0.5f), RoundedCornerShape(1.dp)))
-                        }
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .background(SoloPurpleAccent.copy(alpha = 0.05f))
-                                .border(1.dp, SoloPurpleAccent.copy(alpha = 0.2f), RoundedCornerShape(6.dp)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("?", color = SoloPurpleAccent.copy(alpha = 0.4f), fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                        }
-                    } else {
-                        badgesList.take(5).forEach { badge ->
-                            val badgeColor = if (badge.iconName == "gold" || badge.iconName == "star") SoloGold else SoloPurpleAccent
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        if (badgesList.isEmpty()) {
                             Box(
                                 modifier = Modifier
                                     .size(36.dp)
-                                    .background(badgeColor.copy(alpha = 0.1f))
-                                    .border(1.dp, badgeColor.copy(alpha = 0.3f), RoundedCornerShape(6.dp)),
+                                    .background(SoloBlueAccent.copy(alpha = 0.05f))
+                                    .border(1.dp, SoloBlueAccent.copy(alpha = 0.2f), RoundedCornerShape(6.dp)),
                                 contentAlignment = Alignment.Center
                             ) {
-                                val iconVector = when (badge.iconName) {
-                                    "military_tech" -> Icons.Default.MilitaryTech
-                                    "star" -> Icons.Default.Star
-                                    "local_fire_department" -> Icons.Default.LocalFireDepartment
-                                    "emoji_events" -> Icons.Default.EmojiEvents
-                                    "fitness_center" -> Icons.Default.FitnessCenter
-                                    else -> Icons.Default.MilitaryTech
-                                }
-                                Icon(
-                                    imageVector = iconVector,
-                                    contentDescription = null,
-                                    tint = badgeColor,
-                                    modifier = Modifier.size(18.dp)
-                                )
+                                Box(modifier = Modifier.size(10.dp).background(SoloBlueAccent.copy(alpha = 0.5f), RoundedCornerShape(1.dp)))
                             }
-                        }
-                        if (badgesList.size < 5) {
-                            repeat(5 - badgesList.size) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .background(SoloPurpleAccent.copy(alpha = 0.05f))
+                                    .border(1.dp, SoloPurpleAccent.copy(alpha = 0.2f), RoundedCornerShape(6.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("?", color = SoloPurpleAccent.copy(alpha = 0.4f), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            }
+                        } else {
+                            badgesList.take(5).forEach { badge ->
+                                val badgeColor = if (badge.iconName == "gold" || badge.iconName == "star") SoloGold else SoloPurpleAccent
                                 Box(
                                     modifier = Modifier
                                         .size(36.dp)
-                                        .border(1.dp, SoloTextSecondary.copy(alpha = 0.1f), RoundedCornerShape(6.dp)),
+                                        .background(badgeColor.copy(alpha = 0.1f))
+                                        .border(1.dp, badgeColor.copy(alpha = 0.3f), RoundedCornerShape(6.dp)),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Text("?", color = SoloTextSecondary.copy(alpha = 0.2f), fontSize = 10.sp)
+                                    val iconVector = when (badge.iconName) {
+                                        "military_tech" -> Icons.Default.MilitaryTech
+                                        "star" -> Icons.Default.Star
+                                        "local_fire_department" -> Icons.Default.LocalFireDepartment
+                                        "emoji_events" -> Icons.Default.EmojiEvents
+                                        "fitness_center" -> Icons.Default.FitnessCenter
+                                        "bolt" -> Icons.Default.Bolt
+                                        "shield" -> Icons.Default.Shield
+                                        else -> Icons.Default.MilitaryTech
+                                    }
+                                    Icon(
+                                        imageVector = iconVector,
+                                        contentDescription = null,
+                                        tint = badgeColor,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                            if (badgesList.size < 5) {
+                                repeat(5 - badgesList.size) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .border(1.dp, SoloTextSecondary.copy(alpha = 0.1f), RoundedCornerShape(6.dp)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text("?", color = SoloTextSecondary.copy(alpha = 0.2f), fontSize = 10.sp)
+                                    }
                                 }
                             }
                         }
@@ -1709,12 +1815,14 @@ fun DashboardScreen(viewModel: SystemViewModel) {
         val volumeProgress by viewModel.monthlyVolumeProgress.collectAsStateWithLifecycle()
         var showGoalConfigDialog by remember { mutableStateOf(false) }
 
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .border(1.dp, BentoBorderSlate, RoundedCornerShape(16.dp)),
-            colors = CardDefaults.cardColors(containerColor = SoloCardBg)
-        ) {
+        CyberpunkEntranceContainer(delayMillis = 300) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, BentoBorderSlate, RoundedCornerShape(16.dp))
+                    .cyberpunkHoverCard(onCardClick = { showGoalConfigDialog = true }),
+                colors = CardDefaults.cardColors(containerColor = SoloCardBg)
+            ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -1833,6 +1941,7 @@ fun DashboardScreen(viewModel: SystemViewModel) {
                     )
                 }
             }
+        }
         }
 
         if (showGoalConfigDialog) {
@@ -1987,6 +2096,8 @@ fun DashboardScreen(viewModel: SystemViewModel) {
                                                     "local_fire_department" -> Icons.Default.LocalFireDepartment
                                                     "emoji_events" -> Icons.Default.EmojiEvents
                                                     "fitness_center" -> Icons.Default.FitnessCenter
+                                                    "bolt" -> Icons.Default.Bolt
+                                                    "shield" -> Icons.Default.Shield
                                                     else -> Icons.Default.MilitaryTech
                                                 }
                                                 Icon(icon, contentDescription = null, tint = SoloPurpleAccent, modifier = Modifier.size(20.dp))
@@ -2087,6 +2198,11 @@ fun DashboardScreen(viewModel: SystemViewModel) {
                 }
             }
         }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Workout Consistency Chronicles Calendar Widget
+        QuestCalendarWidget(viewModel)
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -2478,6 +2594,361 @@ fun DailyQuestItemRow(quest: DailyQuestEntity, onIncrement: () -> Unit) {
 }
 
 @Composable
+fun LegendItem(color: Color, label: String) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .background(color, CircleShape)
+        )
+        Text(
+            text = label,
+            color = SoloTextSecondary,
+            fontSize = 9.sp,
+            fontFamily = FontFamily.Monospace
+        )
+    }
+}
+
+@Composable
+fun QuestCalendarWidget(viewModel: SystemViewModel) {
+    val allQuests by viewModel.allDailyQuestsHistory.collectAsStateWithLifecycle()
+    
+    // Local state for the displayed calendar month/year
+    var currentCalendar by remember { 
+        mutableStateOf(java.util.Calendar.getInstance()) 
+    }
+    
+    var selectedDateStr by remember { 
+        val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+        mutableStateOf(sdf.format(java.util.Date())) 
+    }
+
+    // Formatters
+    val monthYearFormat = remember { java.text.SimpleDateFormat("MMMM yyyy", java.util.Locale.getDefault()) }
+    val dayKeyFormat = remember { java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()) }
+
+    // Navigation handlers
+    val onPreviousMonth = {
+        val nextCal = currentCalendar.clone() as java.util.Calendar
+        nextCal.add(java.util.Calendar.MONTH, -1)
+        currentCalendar = nextCal
+    }
+
+    val onNextMonth = {
+        val nextCal = currentCalendar.clone() as java.util.Calendar
+        nextCal.add(java.util.Calendar.MONTH, 1)
+        currentCalendar = nextCal
+    }
+
+    // Days calculation for current month
+    val daysInMonth = currentCalendar.getActualMaximum(java.util.Calendar.DAY_OF_MONTH)
+    
+    // Get the first day of the month aligned to Monday=1, Sunday=7
+    val firstDayOfWeekCal = currentCalendar.clone() as java.util.Calendar
+    firstDayOfWeekCal.set(java.util.Calendar.DAY_OF_MONTH, 1)
+    var firstDayOfWeek = firstDayOfWeekCal.get(java.util.Calendar.DAY_OF_WEEK) - 2 // Adjust to 0-indexed (Monday = 0)
+    if (firstDayOfWeek < 0) firstDayOfWeek += 7 // If Sunday
+
+    // Group quests by date string
+    val questsByDate = remember(allQuests) {
+        allQuests.groupBy { it.date }
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, BentoBorderSky, RoundedCornerShape(16.dp))
+            .testTag("quest_calendar_card"),
+        colors = CardDefaults.cardColors(containerColor = SoloCardBg)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            // Header with navigation
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "EVOLUTION CHRONICLES",
+                        color = SoloBlueAccent,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace,
+                        letterSpacing = 1.sp
+                    )
+                    Text(
+                        text = monthYearFormat.format(currentCalendar.time).uppercase(),
+                        color = SoloTextPrimary,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Black,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    IconButton(
+                        onClick = onPreviousMonth,
+                        modifier = Modifier
+                            .background(SoloDarkGrey, CircleShape)
+                            .size(32.dp)
+                            .testTag("prev_month_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowBack,
+                            contentDescription = "Prev Month",
+                            tint = SoloBlueAccent,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                    IconButton(
+                        onClick = onNextMonth,
+                        modifier = Modifier
+                            .background(SoloDarkGrey, CircleShape)
+                            .size(32.dp)
+                            .testTag("next_month_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowForward,
+                            contentDescription = "Next Month",
+                            tint = SoloBlueAccent,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Days of the week headers
+            val daysOfWeekHeaders = listOf("M", "T", "W", "T", "F", "S", "S")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                daysOfWeekHeaders.forEach { weekday ->
+                    Box(
+                        modifier = Modifier.weight(1f),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = weekday,
+                            color = SoloTextSecondary,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Calendar Days Grid
+            val totalCells = ((firstDayOfWeek + daysInMonth + 6) / 7) * 7
+            val rowsCount = totalCells / 7
+
+            for (r in 0 until rowsCount) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    for (c in 0 until 7) {
+                        val cellIndex = r * 7 + c
+                        val dayOfM = cellIndex - firstDayOfWeek + 1
+                        val isValidDay = dayOfM in 1..daysInMonth
+
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .aspectRatio(1f),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (isValidDay) {
+                                val dayCal = currentCalendar.clone() as java.util.Calendar
+                                dayCal.set(java.util.Calendar.DAY_OF_MONTH, dayOfM)
+                                val dateStr = dayKeyFormat.format(dayCal.time)
+                                val dayQuests = questsByDate[dateStr] ?: emptyList()
+
+                                val totalCount = dayQuests.size
+                                val completedCount = dayQuests.count { it.isCompleted }
+
+                                val isFullyCompleted = totalCount > 0 && completedCount == totalCount
+                                val isPartiallyCompleted = totalCount > 0 && completedCount in 1 until totalCount
+                                val isNeglected = totalCount > 0 && completedCount == 0
+                                
+                                val isSelected = dateStr == selectedDateStr
+
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .background(
+                                            when {
+                                                isFullyCompleted -> SoloBlueAccent.copy(alpha = 0.2f)
+                                                isPartiallyCompleted -> SoloPurpleAccent.copy(alpha = 0.15f)
+                                                isNeglected -> SoloDanger.copy(alpha = 0.1f)
+                                                isSelected -> SoloTextSecondary.copy(alpha = 0.15f)
+                                                else -> Color.Transparent
+                                            }
+                                        )
+                                        .border(
+                                            width = if (isSelected) 2.dp else 1.dp,
+                                            color = when {
+                                                isFullyCompleted -> SoloBlueAccent
+                                                isPartiallyCompleted -> SoloPurpleAccent
+                                                isNeglected -> SoloDanger.copy(alpha = 0.6f)
+                                                isSelected -> SoloTextSecondary
+                                                else -> BentoBorderSlate
+                                            },
+                                            shape = CircleShape
+                                        )
+                                        .clickable { selectedDateStr = dateStr }
+                                        .padding(4.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text(
+                                            text = "$dayOfM",
+                                            color = when {
+                                                isFullyCompleted -> SoloBlueAccent
+                                                isPartiallyCompleted -> SoloPurpleAccent
+                                                isNeglected -> SoloDanger
+                                                else -> SoloTextPrimary
+                                            },
+                                            fontWeight = if (isFullyCompleted || isSelected) FontWeight.Bold else FontWeight.Normal,
+                                            fontSize = 11.sp,
+                                            fontFamily = FontFamily.Monospace
+                                        )
+                                        
+                                        if (totalCount > 0) {
+                                            Row(
+                                                horizontalArrangement = Arrangement.spacedBy(1.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                repeat(completedCount) {
+                                                    Box(modifier = Modifier.size(2.dp).background(SoloBlueAccent, CircleShape))
+                                                }
+                                                repeat(totalCount - completedCount) {
+                                                    Box(modifier = Modifier.size(2.dp).background(SoloTextSecondary.copy(alpha = 0.5f), CircleShape))
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Calendar Legend
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(SoloDarkGrey, RoundedCornerShape(8.dp))
+                    .padding(8.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                LegendItem(color = SoloBlueAccent, label = "Cleared")
+                LegendItem(color = SoloPurpleAccent, label = "Partial")
+                LegendItem(color = SoloDanger, label = "Failed")
+                LegendItem(color = SoloTextSecondary, label = "Rest")
+            }
+
+            // Quests Analysis for Selected Date
+            val selectedDayQuests = questsByDate[selectedDateStr] ?: emptyList()
+            Spacer(modifier = Modifier.height(14.dp))
+            
+            Text(
+                text = "QUEST RECONNAISSANCE FOR $selectedDateStr",
+                color = SoloBlueAccent,
+                fontWeight = FontWeight.Bold,
+                fontSize = 9.sp,
+                fontFamily = FontFamily.Monospace,
+                letterSpacing = 0.5.sp,
+                modifier = Modifier.padding(bottom = 6.dp)
+            )
+
+            if (selectedDayQuests.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(SoloDarkGrey, RoundedCornerShape(10.dp))
+                        .border(0.5.dp, BentoBorderSlate, RoundedCornerShape(10.dp))
+                        .padding(14.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "NO ENEMY GATES RECORDED FOR THIS DATE.\nSYSTEM RECOVERY REST SEQUENCE ACTIVE.",
+                        color = SoloTextSecondary.copy(alpha = 0.6f),
+                        fontSize = 10.sp,
+                        textAlign = TextAlign.Center,
+                        fontFamily = FontFamily.Monospace,
+                        lineHeight = 13.sp
+                    )
+                }
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    selectedDayQuests.forEach { quest ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(SoloDarkGrey, RoundedCornerShape(8.dp))
+                                .border(0.5.dp, if (quest.isCompleted) SoloBlueAccent.copy(alpha = 0.4f) else BentoBorderSlate, RoundedCornerShape(8.dp))
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    text = quest.name.uppercase(),
+                                    color = if (quest.isCompleted) SoloBlueAccent else SoloTextPrimary,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 11.sp,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                                Text(
+                                    text = "Target parameters: ${quest.currentCount}/${quest.targetCount}",
+                                    color = SoloTextSecondary,
+                                    fontSize = 9.sp,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            }
+                            
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(if (quest.isCompleted) SoloBlueAccent.copy(alpha = 0.15f) else Color.Transparent)
+                                    .border(1.dp, if (quest.isCompleted) SoloBlueAccent else SoloTextSecondary.copy(alpha = 0.4f), RoundedCornerShape(4.dp))
+                                    .padding(horizontal = 6.dp, vertical = 3.dp)
+                            ) {
+                                Text(
+                                    text = if (quest.isCompleted) "CLEARED" else "ACTIVE",
+                                    color = if (quest.isCompleted) SoloBlueAccent else SoloTextSecondary,
+                                    fontSize = 8.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun BadgeGlowCard(badge: BadgeEntity) {
     val iconVector = when (badge.iconName) {
         "military_tech" -> Icons.Default.MilitaryTech
@@ -2486,6 +2957,7 @@ fun BadgeGlowCard(badge: BadgeEntity) {
         "emoji_events" -> Icons.Default.EmojiEvents
         "fitness_center" -> Icons.Default.FitnessCenter
         "shield" -> Icons.Default.Shield
+        "bolt" -> Icons.Default.Bolt
         else -> Icons.Default.Troubleshoot
     }
 
@@ -4022,6 +4494,39 @@ fun LeaderboardScreen(viewModel: SystemViewModel) {
             modifier = Modifier.padding(bottom = 16.dp)
         )
 
+        var selectedDivision by remember { mutableStateOf("ALL HUNTERS") }
+
+        // Division Selector Tabs
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 12.dp)
+                .background(SoloDarkGrey, RoundedCornerShape(8.dp))
+                .padding(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            listOf("ALL HUNTERS", "S-RANK DIVISION", "LOCAL RANK").forEach { division ->
+                val isSelected = selectedDivision == division
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(if (isSelected) SoloBlueAccent else Color.Transparent)
+                        .clickable { selectedDivision = division }
+                        .padding(vertical = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = division,
+                        color = if (isSelected) SoloBlack else SoloTextSecondary,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+            }
+        }
+
         // Compare Card
         Card(
             modifier = Modifier
@@ -4071,12 +4576,33 @@ fun LeaderboardScreen(viewModel: SystemViewModel) {
             }
         }
 
-        sortedHunters.forEachIndexed { index, hunter ->
+        val filteredHunters = remember(sortedHunters, selectedDivision, userLevel) {
+            when (selectedDivision) {
+                "S-RANK DIVISION" -> {
+                    // Filter level >= 70 or includes the user
+                    sortedHunters.filter { it.level >= 70 || it.type == "user" }
+                }
+                "LOCAL RANK" -> {
+                    val userIdx = sortedHunters.indexOfFirst { it.type == "user" }
+                    if (userIdx != -1) {
+                        val start = (userIdx - 1).coerceAtLeast(0)
+                        val end = (userIdx + 3).coerceAtMost(sortedHunters.size)
+                        sortedHunters.subList(start, end)
+                    } else {
+                        sortedHunters
+                    }
+                }
+                else -> sortedHunters
+            }
+        }
+
+        filteredHunters.forEachIndexed { index, hunter ->
             val isUser = hunter.type == "user"
-            val rankBorderColor = when (index) {
-                0 -> SoloGold
-                1 -> SoloBlueAccent
-                2 -> SoloPurpleAccent
+            val actualRank = sortedHunters.indexOf(hunter) + 1
+            val rankBorderColor = when (actualRank) {
+                1 -> SoloGold
+                2 -> SoloBlueAccent
+                3 -> SoloPurpleAccent
                 else -> Color.Transparent
             }
 
@@ -4102,8 +4628,13 @@ fun LeaderboardScreen(viewModel: SystemViewModel) {
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "#${index + 1}",
-                            color = if (index == 0) SoloGold else if (index == 1) SoloBlueAccent else SoloTextSecondary,
+                            text = "#$actualRank",
+                            color = when (actualRank) {
+                                1 -> SoloGold
+                                2 -> SoloBlueAccent
+                                3 -> SoloPurpleAccent
+                                else -> SoloTextSecondary
+                            },
                             fontWeight = FontWeight.ExtraBold,
                             fontSize = 16.sp,
                             modifier = Modifier.width(36.dp)
@@ -6347,6 +6878,9 @@ fun HevyWorkoutAchievementDialog(viewModel: SystemViewModel) {
     val userProfile by viewModel.userProfile.collectAsStateWithLifecycle()
     val username = userProfile?.name ?: "Hunter"
 
+    var showFormatSelection by remember { mutableStateOf(false) }
+    var isShareSelected by remember { mutableStateOf(false) }
+
     // Deduce today's date formatted as YYYY-MM-DD
     val today = remember {
         val calendar = java.util.Calendar.getInstance()
@@ -6520,21 +7054,58 @@ fun HevyWorkoutAchievementDialog(viewModel: SystemViewModel) {
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                // Download Hevy Card Trigger Button
-                Button(
-                    onClick = {
-                        viewModel.downloadHevyWorkoutCard(context)
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = SoloBlueAccent),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(48.dp)
-                        .testTag("download_hevy_card_button"),
-                    shape = RoundedCornerShape(10.dp)
+                // Download & Share Hevy Card Buttons
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Icon(imageVector = Icons.Default.Share, contentDescription = "Share Icon", tint = SoloBlack, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("DOWNLOAD RATIFIED SHARE CARD", color = SoloBlack, fontSize = 11.sp, fontWeight = FontWeight.Black, fontFamily = FontFamily.Monospace)
+                    Button(
+                        onClick = {
+                            isShareSelected = false
+                            showFormatSelection = true
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = SoloPurpleAccent),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp)
+                            .testTag("download_hevy_card_button"),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(imageVector = Icons.Default.Download, contentDescription = "Download Icon", tint = SoloBlack, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("DOWNLOAD", color = SoloBlack, fontSize = 10.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                    }
+
+                    Button(
+                        onClick = {
+                            isShareSelected = true
+                            showFormatSelection = true
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = SoloBlueAccent),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp)
+                            .testTag("share_hevy_card_button"),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(imageVector = Icons.Default.Share, contentDescription = "Share Icon", tint = SoloBlack, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("SHARE CARD", color = SoloBlack, fontSize = 10.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                    }
+                }
+
+                if (showFormatSelection) {
+                    FormatSelectionDialog(
+                        onDismiss = { showFormatSelection = false },
+                        onFormatSelected = { isPng ->
+                            showFormatSelection = false
+                            if (isShareSelected) {
+                                viewModel.shareHevyWorkoutCard(context, isPng = isPng)
+                            } else {
+                                viewModel.downloadHevyWorkoutCard(context, isPng = isPng)
+                            }
+                        }
+                    )
                 }
 
                 // Continue Close
@@ -6566,6 +7137,9 @@ fun SoloLevelUpAnimationOverlay(level: Int, viewModel: SystemViewModel, onDismis
     val context = androidx.compose.ui.platform.LocalContext.current
     val infiniteTransition = rememberInfiniteTransition(label = "cyber_pulser_system")
     val random = remember { java.util.Random() }
+
+    var showFormatSelection by remember { mutableStateOf(false) }
+    var isShareSelected by remember { mutableStateOf(false) }
 
     // Crackle speed factor
     val lightningTrigger by infiniteTransition.animateFloat(
@@ -7165,7 +7739,10 @@ fun SoloLevelUpAnimationOverlay(level: Int, viewModel: SystemViewModel, onDismis
             ) {
                 // DOWNLOAD CARD IMAGE
                 Button(
-                    onClick = { viewModel.downloadLevelUpCard(context, level) },
+                    onClick = {
+                        isShareSelected = false
+                        showFormatSelection = true
+                    },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1F2937)),
                     modifier = Modifier.weight(1f).height(44.dp).border(1.dp, colorCyberYellow, RoundedCornerShape(4.dp)),
                     shape = RoundedCornerShape(4.dp),
@@ -7188,7 +7765,10 @@ fun SoloLevelUpAnimationOverlay(level: Int, viewModel: SystemViewModel, onDismis
 
                 // SHARE WITH CHROME / APPS
                 Button(
-                    onClick = { viewModel.shareLevelUpCard(context, level) },
+                    onClick = {
+                        isShareSelected = true
+                        showFormatSelection = true
+                    },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1F2937)),
                     modifier = Modifier.weight(1f).height(44.dp).border(1.dp, colorCyberBlue, RoundedCornerShape(4.dp)),
                     shape = RoundedCornerShape(4.dp),
@@ -7208,6 +7788,20 @@ fun SoloLevelUpAnimationOverlay(level: Int, viewModel: SystemViewModel, onDismis
                         )
                     }
                 }
+            }
+
+            if (showFormatSelection) {
+                FormatSelectionDialog(
+                    onDismiss = { showFormatSelection = false },
+                    onFormatSelected = { isPng ->
+                        showFormatSelection = false
+                        if (isShareSelected) {
+                            viewModel.shareLevelUpCard(context, level, isPng = isPng)
+                        } else {
+                            viewModel.downloadLevelUpCard(context, level, isPng = isPng)
+                        }
+                    }
+                )
             }
 
             Spacer(modifier = Modifier.height(20.dp))
@@ -7345,6 +7939,7 @@ fun AttributesRadarChart(
 
 @Composable
 fun ProfileScreen(viewModel: SystemViewModel) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val profileState by viewModel.userProfile.collectAsStateWithLifecycle()
     val measurementsState by viewModel.bodyMeasurements.collectAsStateWithLifecycle()
@@ -7354,6 +7949,56 @@ fun ProfileScreen(viewModel: SystemViewModel) {
 
     val profile = profileState ?: return
     val latestMeasurement = measurementsState.firstOrNull()
+
+    val profilePhotoUri by viewModel.profilePhotoUri.collectAsStateWithLifecycle()
+
+    val photoLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+        onResult = { uri ->
+            if (uri != null) {
+                try {
+                    context.contentResolver.takePersistableUriPermission(
+                        uri,
+                        android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    )
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+                viewModel.updateProfilePhoto(uri.toString())
+            }
+        }
+    )
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+        onResult = { isGranted ->
+            if (isGranted) {
+                photoLauncher.launch(arrayOf("image/*"))
+            } else {
+                viewModel.notifyMsg("Gallery permission denied. Launching secure fallback picker.", "neutral")
+                photoLauncher.launch(arrayOf("image/*"))
+            }
+        }
+    )
+
+    val triggerPhotoEdit = {
+        val permissionToRequest = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            android.Manifest.permission.READ_MEDIA_IMAGES
+        } else {
+            android.Manifest.permission.READ_EXTERNAL_STORAGE
+        }
+        
+        val hasPermission = androidx.core.content.ContextCompat.checkSelfPermission(
+            context,
+            permissionToRequest
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        
+        if (hasPermission) {
+            photoLauncher.launch(arrayOf("image/*"))
+        } else {
+            permissionLauncher.launch(permissionToRequest)
+        }
+    }
 
     // Interactive sliders local state
     var editBench by remember { mutableStateOf(if (profile.benchPress > 0) profile.benchPress else 50f) }
@@ -7380,8 +8025,9 @@ fun ProfileScreen(viewModel: SystemViewModel) {
     var showSimReferral by remember { mutableStateOf(false) }
     var referrerFriendName by remember { mutableStateOf("") }
     var showHunterIdShareDialog by remember { mutableStateOf(false) }
+    var showFormatSelectionLicense by remember { mutableStateOf(false) }
+    var isShareSelectedLicense by remember { mutableStateOf(false) }
     val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
-    val context = androidx.compose.ui.platform.LocalContext.current
 
     var selectedHour by remember { mutableStateOf(8) }
     var selectedMinute by remember { mutableStateOf(0) }
@@ -7438,13 +8084,15 @@ fun ProfileScreen(viewModel: SystemViewModel) {
         }
 
         // STATS SUMMARY CARD
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 4.dp)
-                .border(1.dp, BentoBorderSky.copy(alpha = 0.3f), RoundedCornerShape(12.dp)),
-            colors = CardDefaults.cardColors(containerColor = SoloCardBg)
-        ) {
+        CyberpunkEntranceContainer(delayMillis = 0) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp)
+                    .border(1.dp, BentoBorderSky.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
+                    .cyberpunkHoverCard(onCardClick = {}),
+                colors = CardDefaults.cardColors(containerColor = SoloCardBg)
+            ) {
             Row(
                 modifier = Modifier.padding(16.dp).fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
@@ -7508,6 +8156,7 @@ fun ProfileScreen(viewModel: SystemViewModel) {
                 }
             }
         }
+        }
 
         Row(
             modifier = Modifier
@@ -7566,16 +8215,18 @@ fun ProfileScreen(viewModel: SystemViewModel) {
             }
             val totalLiftLimit = profile.benchPress + profile.squat + profile.deadlift + profile.overheadPress
 
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth(0.92f)
-                    .align(Alignment.CenterHorizontally)
-                    .padding(vertical = 12.dp)
-                    .aspectRatio(3f / 4f)
-                    .border(2.dp, SoloBlueAccent, RoundedCornerShape(20.dp)),
-                colors = CardDefaults.cardColors(containerColor = SoloDarkGrey),
-                shape = RoundedCornerShape(20.dp)
-            ) {
+            CyberpunkEntranceContainer(delayMillis = 100) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth(0.92f)
+                        .align(Alignment.CenterHorizontally)
+                        .padding(vertical = 12.dp)
+                        .aspectRatio(3f / 4f)
+                        .border(2.dp, SoloBlueAccent, RoundedCornerShape(20.dp))
+                        .cyberpunkHoverCard(onCardClick = {}),
+                    colors = CardDefaults.cardColors(containerColor = SoloDarkGrey),
+                    shape = RoundedCornerShape(20.dp)
+                ) {
                 Box(modifier = Modifier.fillMaxSize()) {
                     // Futuristic Background lines
                     Column(
@@ -7630,15 +8281,26 @@ fun ProfileScreen(viewModel: SystemViewModel) {
                                     .size(85.dp)
                                     .clip(RoundedCornerShape(12.dp))
                                     .background(SoloBlack)
-                                    .border(1.dp, SoloPurpleAccent, RoundedCornerShape(12.dp)),
+                                    .border(1.dp, SoloPurpleAccent, RoundedCornerShape(12.dp))
+                                    .clickable { triggerPhotoEdit() }
+                                    .testTag("edit_profile_photo_hologram"),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Person,
-                                    contentDescription = null,
-                                    tint = SoloBlueAccent.copy(alpha = 0.7f),
-                                    modifier = Modifier.size(50.dp)
-                                )
+                                if (!profilePhotoUri.isNullOrEmpty()) {
+                                    AsyncImage(
+                                        model = profilePhotoUri,
+                                        contentDescription = "Hologram Profile Pic",
+                                        modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(12.dp)),
+                                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Default.Person,
+                                        contentDescription = null,
+                                        tint = SoloBlueAccent.copy(alpha = 0.7f),
+                                        modifier = Modifier.size(50.dp)
+                                    )
+                                }
                                 // Scan line indicator
                                 Box(
                                     modifier = Modifier
@@ -7710,7 +8372,7 @@ fun ProfileScreen(viewModel: SystemViewModel) {
                             }
                         }
 
-                        // Footer Block (System watermark & Share button)
+                        // Footer Block (System watermark)
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Divider(color = SoloBlueAccent.copy(alpha = 0.2f), thickness = 0.5.dp)
                             Row(
@@ -7724,28 +8386,99 @@ fun ProfileScreen(viewModel: SystemViewModel) {
                                     fontSize = 7.sp,
                                     fontFamily = FontFamily.Monospace
                                 )
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(6.dp))
-                                        .background(SoloBlueAccent)
-                                        .clickable {
-                                            showHunterIdShareDialog = true
-                                        }
-                                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                                        .testTag("share_hunter_id_card_button")
-                                ) {
-                                    Text(
-                                        text = "SHARE CARD ⚡",
-                                        color = SoloBlack,
-                                        fontSize = 8.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        fontFamily = FontFamily.Monospace
-                                    )
-                                }
+                                Text(
+                                    text = "STATUS: ACTIVE",
+                                    color = SoloPurpleAccent,
+                                    fontSize = 7.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace
+                                )
                             }
                         }
                     }
                 }
+            }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // OUTSIDE WATERMARK CONTROLS
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth(0.92f)
+                    .align(Alignment.CenterHorizontally),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Button(
+                    onClick = {
+                        isShareSelectedLicense = false
+                        showFormatSelectionLicense = true
+                    },
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp)
+                        .testTag("download_hunter_license_button"),
+                    colors = ButtonDefaults.buttonColors(containerColor = SoloPurpleAccent),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Download,
+                        contentDescription = "Download License Card",
+                        tint = SoloBlack,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "DOWNLOAD CARD",
+                        color = SoloBlack,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+
+                Button(
+                    onClick = {
+                        isShareSelectedLicense = true
+                        showFormatSelectionLicense = true
+                    },
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp)
+                        .testTag("share_hunter_id_card_button"),
+                    colors = ButtonDefaults.buttonColors(containerColor = SoloBlack),
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(1.dp, SoloBlueAccent)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Share,
+                        contentDescription = "Share License Card",
+                        tint = SoloBlueAccent,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "SHARE CARD ⚡",
+                        color = SoloBlueAccent,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+            }
+
+            if (showFormatSelectionLicense) {
+                FormatSelectionDialog(
+                    onDismiss = { showFormatSelectionLicense = false },
+                    onFormatSelected = { isPng ->
+                        showFormatSelectionLicense = false
+                        if (isShareSelectedLicense) {
+                            viewModel.shareLevelUpCard(context, profile.level, isPng = isPng)
+                        } else {
+                            viewModel.downloadLevelUpCard(context, profile.level, isPng = isPng)
+                        }
+                    }
+                )
             }
 
             if (showHunterIdShareDialog) {
@@ -7803,13 +8536,15 @@ fun ProfileScreen(viewModel: SystemViewModel) {
             }
 
             // WEB RADAR CHART CARD
-            Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 8.dp)
-                .border(2.dp, SoloPurpleAccent.copy(alpha = 0.5f), RoundedCornerShape(16.dp)),
-            colors = CardDefaults.cardColors(containerColor = SoloBlack.copy(0.4f))
-        ) {
+            CyberpunkEntranceContainer(delayMillis = 200) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp)
+                        .border(2.dp, SoloPurpleAccent.copy(alpha = 0.5f), RoundedCornerShape(16.dp))
+                        .cyberpunkHoverCard(onCardClick = {}),
+                    colors = CardDefaults.cardColors(containerColor = SoloBlack.copy(0.4f))
+                ) {
             Column(
                 modifier = Modifier.padding(16.dp).fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally
@@ -7846,15 +8581,18 @@ fun ProfileScreen(viewModel: SystemViewModel) {
                 )
             }
         }
+        }
 
         // INTERACTIVE LIFTS / DIMENSIONS SLIDER CONTROLLER
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 8.dp)
-                .border(1.dp, BentoBorderSlate, RoundedCornerShape(14.dp)),
-            colors = CardDefaults.cardColors(containerColor = SoloCardBg)
-        ) {
+        CyberpunkEntranceContainer(delayMillis = 300) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp)
+                    .border(1.dp, BentoBorderSlate, RoundedCornerShape(14.dp))
+                    .cyberpunkHoverCard(onCardClick = {}),
+                colors = CardDefaults.cardColors(containerColor = SoloCardBg)
+            ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
                     text = "TWEAK LIFTS & MEASUREMENTS",
@@ -7958,6 +8696,7 @@ fun ProfileScreen(viewModel: SystemViewModel) {
                     Text("SAVE LIFTS & MEASUREMENTS", color = SoloBlack, fontWeight = FontWeight.Bold, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
                 }
             }
+        }
         }
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -9220,6 +9959,192 @@ fun AdminChatbotDialog(viewModel: SystemViewModel, onDismiss: () -> Unit) {
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+fun FormatSelectionDialog(
+    onDismiss: () -> Unit,
+    onFormatSelected: (isPng: Boolean) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "SELECT CARD FORMAT",
+                color = SoloBlueAccent,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace,
+                letterSpacing = 1.sp
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = "Select an image encoding format to process and output your card.",
+                    color = SoloTextSecondary,
+                    fontSize = 12.sp
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = { onFormatSelected(true) },
+                        colors = ButtonDefaults.buttonColors(containerColor = SoloPurpleAccent),
+                        modifier = Modifier.weight(1f).height(44.dp).testTag("dialog_png_btn"),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("PNG (Lossless)", color = SoloBlack, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                    }
+                    Button(
+                        onClick = { onFormatSelected(false) },
+                        colors = ButtonDefaults.buttonColors(containerColor = SoloBlueAccent),
+                        modifier = Modifier.weight(1f).height(44.dp).testTag("dialog_jpg_btn"),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("JPG (Optimized)", color = SoloBlack, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            Button(
+                onClick = onDismiss,
+                colors = ButtonDefaults.buttonColors(containerColor = SoloDarkGrey),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text("CANCEL", color = SoloTextPrimary, fontSize = 11.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+            }
+        },
+        containerColor = SoloDarkGrey,
+        shape = RoundedCornerShape(16.dp)
+    )
+}
+
+@Composable
+fun RealtimeSystemAlertsBanner(viewModel: SystemViewModel) {
+    val alerts by viewModel.systemAlerts.collectAsStateWithLifecycle()
+    val isOnline by viewModel.isNetworkAvailable.collectAsStateWithLifecycle()
+
+    if (alerts.isEmpty()) {
+        if (!isOnline) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
+                    .border(width = 1.dp, color = SoloDanger.copy(0.4f), shape = RoundedCornerShape(8.dp)),
+                colors = CardDefaults.cardColors(containerColor = SoloDarkGrey.copy(0.9f)),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(SoloDanger)
+                    )
+                    Text(
+                        text = "SYSTEM OFFLINE: LOCAL CACHE RESILIENCE ACTIVATED",
+                        color = SoloDanger,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace,
+                        letterSpacing = 0.5.sp
+                    )
+                }
+            }
+        }
+        return
+    }
+
+    val currentAlert = alerts.first()
+
+    val bannerColor = when (currentAlert.type) {
+        "warning" -> SoloDanger
+        "quest" -> Color(0xFFF59E0B) // Warn Yellow
+        "reminder" -> SoloBlueAccent
+        else -> SoloPurpleAccent
+    }
+
+    val bannerIcon = when (currentAlert.type) {
+        "warning" -> Icons.Default.WifiOff
+        "quest" -> Icons.Default.Warning
+        "reminder" -> Icons.Default.NotificationImportant
+        else -> Icons.Default.Info
+    }
+
+    val alertTypeText = when (currentAlert.type) {
+        "warning" -> "[ SYSTEM WARNING ]"
+        "quest" -> "[ COMPULSORY QUEST DECREE ]"
+        "reminder" -> "[ TRAINING REMINDER ]"
+        else -> "[ SYSTEM STATUS PROTOCOL ]"
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .border(width = 1.dp, color = bannerColor.copy(0.35f), shape = RoundedCornerShape(8.dp)),
+        colors = CardDefaults.cardColors(containerColor = SoloDarkGrey),
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = bannerIcon,
+                    contentDescription = "Alert Icon",
+                    tint = bannerColor,
+                    modifier = Modifier.size(18.dp)
+                )
+                Column {
+                    Text(
+                        text = alertTypeText,
+                        color = bannerColor,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace,
+                        letterSpacing = 1.sp
+                    )
+                    Text(
+                        text = currentAlert.message,
+                        color = SoloTextPrimary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Normal,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+            TextButton(
+                onClick = { viewModel.dismissSystemAlert(currentAlert.id) },
+                colors = ButtonDefaults.textButtonColors(contentColor = bannerColor),
+                modifier = Modifier.padding(start = 6.dp)
+            ) {
+                Text(
+                    text = "DISMISS",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace
+                )
             }
         }
     }

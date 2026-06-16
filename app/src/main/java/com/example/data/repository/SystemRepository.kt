@@ -11,6 +11,7 @@ class SystemRepository(private val systemDao: SystemDao) {
     val allWorkoutLogs: Flow<List<WorkoutLogEntity>> = systemDao.getAllWorkoutLogs()
     val allBodyMeasurements: Flow<List<BodyMeasurementEntity>> = systemDao.getAllBodyMeasurements()
     val earnedBadges: Flow<List<BadgeEntity>> = systemDao.getEarnedBadges()
+    val allDailyQuestsHistory: Flow<List<DailyQuestEntity>> = systemDao.getAllDailyQuests()
 
     suspend fun getUserProfileOneShot(): UserProfileEntity? = systemDao.getUserProfileOneShot()
 
