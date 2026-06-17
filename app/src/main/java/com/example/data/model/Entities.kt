@@ -92,3 +92,16 @@ data class ExerciseEntity(
     val isCustom: Boolean = false
 )
 
+@Entity(tableName = "afterlife_post")
+data class AfterlifePostEntity(
+    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val authorName: String,
+    val authorRank: String,
+    val content: String,
+    val guildName: String,
+    val dateStr: String,
+    val likes: Int = 0,
+    val isLiked: Boolean = false,
+    val exerciseTag: String = ""
+)
+

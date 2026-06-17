@@ -94,4 +94,23 @@ class SystemRepository(private val systemDao: SystemDao) {
     suspend fun deleteExercise(name: String) {
         systemDao.deleteExercise(name)
     }
+
+    // --- Afterlife Social Feed ---
+    val allAfterlifePosts: Flow<List<AfterlifePostEntity>> = systemDao.getAllAfterlifePosts()
+
+    suspend fun insertAfterlifePost(post: AfterlifePostEntity) {
+        systemDao.insertAfterlifePost(post)
+    }
+
+    suspend fun insertAfterlifePosts(posts: List<AfterlifePostEntity>) {
+        systemDao.insertAfterlifePosts(posts)
+    }
+
+    suspend fun updateAfterlifePost(post: AfterlifePostEntity) {
+        systemDao.updateAfterlifePost(post)
+    }
+
+    suspend fun deleteAfterlifePost(id: Int) {
+        systemDao.deleteAfterlifePost(id)
+    }
 }

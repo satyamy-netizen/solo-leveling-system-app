@@ -31,6 +31,7 @@ class SystemViewModel(application: Application) : AndroidViewModel(application) 
     val bodyMeasurements = MutableStateFlow<List<BodyMeasurementEntity>>(emptyList())
     val earnedBadges = MutableStateFlow<List<BadgeEntity>>(emptyList())
     val allExercises = MutableStateFlow<List<ExerciseEntity>>(emptyList())
+    val afterlifePosts = MutableStateFlow<List<AfterlifePostEntity>>(emptyList())
 
     // --- Derived state for last day's total weight lifted instead of gold ---
     val lastDayTotalWeight = workoutLogs.map { logs ->
@@ -123,6 +124,18 @@ class SystemViewModel(application: Application) : AndroidViewModel(application) 
     // Real-time network and system alerts / reminders notification states
     val isNetworkAvailable = MutableStateFlow<Boolean>(true)
     val systemAlerts = MutableStateFlow<List<SystemAlert>>(emptyList())
+    val activeThemeSetting = MutableStateFlow<String>("solo_leveling")
+
+    fun saveActiveThemeSetting(theme: String) {
+        activeThemeSetting.value = theme
+        com.example.ui.theme.ThemeHolder.activeTheme = theme
+        try {
+            val sharedPrefs = getApplication<Application>().getSharedPreferences("solo_leveling_prefs", android.content.Context.MODE_PRIVATE)
+            sharedPrefs.edit().putString("active_theme_setting", theme).apply()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
 
     fun registerConnectivityCheck() {
         try {
@@ -215,6 +228,9 @@ class SystemViewModel(application: Application) : AndroidViewModel(application) 
             monthlyGoalSessions.value = sharedPrefs.getInt("monthly_goal_sessions", 12)
             monthlyGoalVolume.value = sharedPrefs.getInt("monthly_goal_volume", 10000)
             profilePhotoUri.value = sharedPrefs.getString("profile_photo_uri", null)
+            val savedTheme = sharedPrefs.getString("active_theme_setting", "solo_leveling") ?: "solo_leveling"
+            activeThemeSetting.value = savedTheme
+            com.example.ui.theme.ThemeHolder.activeTheme = savedTheme
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -364,6 +380,63 @@ class SystemViewModel(application: Application) : AndroidViewModel(application) 
                     initializeDefaultExercises()
                 }
             }
+        }
+
+        viewModelScope.launch {
+            repository.allAfterlifePosts.collect { posts ->
+                afterlifePosts.value = posts
+                if (posts.isEmpty()) {
+                    initializeDefaultAfterlifePosts()
+                }
+            }
+        }
+    }
+
+    private fun initializeDefaultAfterlifePosts() {
+        viewModelScope.launch {
+            val list = listOf(
+                AfterlifePostEntity(
+                    authorName = "Sung Jin-Woo",
+                    authorRank = "S-RANK MONARCH",
+                    content = "The daily fatigue trial is simple: 100 push-ups, 100 sit-ups, 100 squats, and 10km run. Re-allocated all accumulated stat points to Strength. No shortcuts on the path to the sovereign.",
+                    guildName = "Ahjin Guild",
+                    dateStr = "2h ago",
+                    likes = 452,
+                    isLiked = false,
+                    exerciseTag = "Squat"
+                ),
+                AfterlifePostEntity(
+                    authorName = "Cha Hae-In",
+                    authorRank = "S-RANK SWORD",
+                    content = "Completed 12 rounds of sword strike endurance intervals paired with heavy lifting. Agility stat increased. Remember, correct breathing is the source of all mana flow.",
+                    guildName = "Hunters Guild",
+                    dateStr = "4h ago",
+                    likes = 312,
+                    isLiked = false,
+                    exerciseTag = "Overhead Press"
+                ),
+                AfterlifePostEntity(
+                    authorName = "Yoo Jin-Ho",
+                    authorRank = "D-RANK VICE-MASTER",
+                    content = "Logged a new Bench Press personal record today! Supporting the boss's raid team means my strength can't fall behind. S-Class protein shake prepared!",
+                    guildName = "Ahjin Guild",
+                    dateStr = "6h ago",
+                    likes = 120,
+                    isLiked = false,
+                    exerciseTag = "Bench Press"
+                ),
+                AfterlifePostEntity(
+                    authorName = "Thomas Andre",
+                    authorRank = "S-RANK NATIONAL",
+                    content = "Crushed heavy deadlifts this afternoon in the Scavenger training facility. S-Rank intensity is mandatory for the Goliath. Let's see some power out of the S-Class rookies today!",
+                    guildName = "Scavenger Guild",
+                    dateStr = "1d ago",
+                    likes = 512,
+                    isLiked = false,
+                    exerciseTag = "Deadlift"
+                )
+            )
+            repository.insertAfterlifePosts(list)
         }
     }
 
@@ -899,6 +972,44 @@ class SystemViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    // --- Afterlife Social Feed Actions ---
+    fun createAfterlifePost(content: String, guild: String, exerciseTag: String = "") {
+        viewModelScope.launch {
+            val profile = userProfile.value
+            val author = profile?.name ?: "Challenger"
+            val rankClass = when {
+                (profile?.level ?: 1) >= 11 -> "S-RANK MONARCH"
+                (profile?.level ?: 1) >= 9 -> "A-RANK ELITE"
+                (profile?.level ?: 1) >= 7 -> "B-RANK VETERAN"
+                (profile?.level ?: 1) >= 5 -> "C-RANK HUNTER"
+                (profile?.level ?: 1) >= 3 -> "D-RANK SCOUT"
+                else -> "E-RANK RECRUIT"
+            }
+            val newPost = AfterlifePostEntity(
+                authorName = author,
+                authorRank = rankClass,
+                content = content,
+                guildName = guild,
+                dateStr = "Just now",
+                likes = 0,
+                isLiked = false,
+                exerciseTag = exerciseTag
+            )
+            repository.insertAfterlifePost(newPost)
+            notifyMsg("Workout post broadcasted to the Guild Network!", "success")
+        }
+    }
+
+    fun toggleLikeAfterlifePost(post: AfterlifePostEntity) {
+        viewModelScope.launch {
+            val updated = post.copy(
+                likes = if (post.isLiked) post.likes - 1 else post.likes + 1,
+                isLiked = !post.isLiked
+            )
+            repository.updateAfterlifePost(updated)
+        }
+    }
+
     // --- Workouts & Custom Log Injection ---
     fun logWorkoutExercise(name: String, category: String, weight: Float, sets: Int, reps: Int, barWeight: Float = 20f, intensity: String = "Medium") {
         val date = getTodayDateString()
@@ -1181,6 +1292,7 @@ class SystemViewModel(application: Application) : AndroidViewModel(application) 
                     .post(requestBody)
                     .build()
                 
+                SoloErrorLogger.info("GeminiAPI", "Requested set intensity calculation for $sets sets x $reps reps at $weight kg")
                 client.newCall(request).execute().use { response ->
                     if (!response.isSuccessful) throw Exception("HTTP ${response.code}")
                     val body = response.body?.string() ?: throw Exception("Empty")
@@ -1189,13 +1301,16 @@ class SystemViewModel(application: Application) : AndroidViewModel(application) 
                     val text = cand.getJSONObject("content").getJSONArray("parts").getJSONObject(0).getString("text").trim()
                     
                     val cleanVal = text.uppercase()
-                    when {
+                    val resultVal = when {
                         cleanVal.contains("LOW") -> "Low"
                         cleanVal.contains("HIGH") -> "High"
                         else -> "Medium"
                     }
+                    SoloErrorLogger.info("GeminiAPI", "Set intensity calculated: $resultVal")
+                    resultVal
                 }
             } catch (e: Exception) {
+                SoloErrorLogger.error("GeminiAPI", "Failed set intensity calculation, switching to local index fallback", e)
                 val index = sets * reps * (weight + barWeight)
                 when {
                     index < 250f -> "Low"
@@ -1584,6 +1699,7 @@ class SystemViewModel(application: Application) : AndroidViewModel(application) 
                         .post(requestBody)
                         .build()
 
+                    SoloErrorLogger.info("GeminiAPI", "Requested AI personalization workout from Gemini backend for focus: $todayFocus")
                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                         try {
                             client.newCall(request).execute().use { response ->
@@ -1630,8 +1746,10 @@ class SystemViewModel(application: Application) : AndroidViewModel(application) 
                                 aiTrainerMessage.value = parsedMessage
                                 aiTrainerExercises.value = parsedList
                                 aiTrainerLoading.value = false
+                                SoloErrorLogger.info("GeminiAPI", "Successfully generated ${parsedList.size} custom AI exercises.")
                             }
                         } catch (e: Exception) {
+                            SoloErrorLogger.error("GeminiAPI", "Failed to compile custom AI exercises, utilizing fallback list", e)
                             val simulatedList = getLocalSimulatedWorkout(todayFocus, profile.equipment, profile.intensity)
                             aiTrainerMessage.value = "Hunter ${profile.name}, a synaptic connection anomaly occurred (${e.localizedMessage}). Utilizing secure local fallback sequence:"
                             aiTrainerExercises.value = simulatedList
@@ -1639,6 +1757,7 @@ class SystemViewModel(application: Application) : AndroidViewModel(application) 
                         }
                     }
                 } catch (e: Exception) {
+                    SoloErrorLogger.critical("GeminiAPI", "Severe synapse route failure during AI personalization setup", e)
                     aiTrainerError.value = "Synapse route error: ${e.localizedMessage}"
                     aiTrainerLoading.value = false
                 }
@@ -1728,6 +1847,7 @@ class SystemViewModel(application: Application) : AndroidViewModel(application) 
 
     val adminProcessing = MutableStateFlow(false)
     val adminResponseLog = MutableStateFlow<List<String>>(emptyList())
+    val selectedAdminModel = MutableStateFlow("gemini-3.1-flash-lite-preview")
     val adminChatMessages = MutableStateFlow<List<AdminChatMessage>>(listOf(
         AdminChatMessage("system", "Welcome, Sovereign Satyam. I am the Solo Leveling System Architect Core. You may issue prompts, ask questions, or decree database modifications directly. I have full override privileges on user profiles, quests, and workout structures.")
     ))
@@ -1792,7 +1912,21 @@ class SystemViewModel(application: Application) : AndroidViewModel(application) 
                 } catch (e: Exception) {
                     responseText = "FAILED execution logic error: ${e.message}"
                 }
-                adminChatMessages.value = adminChatMessages.value + AdminChatMessage("system", responseText)
+
+                // Append Model latency simulator for incredible chatbot fidelity & feedback
+                val simulatedLatency = when (selectedAdminModel.value) {
+                    "gemini-3.1-flash-lite-preview" -> 35 + (5..25).random()
+                    "gemini-3.5-flash" -> 90 + (15..45).random()
+                    else -> 280 + (70..130).random()
+                }
+                val modelDisplayName = when (selectedAdminModel.value) {
+                    "gemini-3.1-flash-lite-preview" -> "♊ GEMINI 3.1 FLASH-LITE (RAPID NEURAL ENGINE)"
+                    "gemini-3.5-flash" -> "🌀 GEMINI 3.5 FLASH (BALANCED INTELLIGENCE)"
+                    else -> "🔱 GEMINI 3.1 PRO (HIGH-THINKING REASONER)"
+                }
+                val formattedSimulated = "[$modelDisplayName]\n[Resonance Latency: ${simulatedLatency}ms]\n\n$responseText"
+
+                adminChatMessages.value = adminChatMessages.value + AdminChatMessage("system", formattedSimulated)
                 notifyMsg(responseText, "achievement")
                 adminProcessing.value = false
             } else {
@@ -1809,6 +1943,15 @@ class SystemViewModel(application: Application) : AndroidViewModel(application) 
                     val instructions = """
                         You are the Solo Leveling System Architect Core, the omnipotent controller of user satyamyadav30042008@gmail.com's system database.
                         The administrator (SOVEREIGN) wants to make changes to the app by writing prompts in this chat.
+                        
+                        [CURRENT APP PARAMETERS & STATE]
+                        - Profile Level: ${profile.level}
+                        - Current XP: ${profile.xp}
+                        - Attributes Matrix -> Strength: ${profile.strength}, Agility: ${profile.agility}, Vitality: ${profile.vitality}, Intelligence: ${profile.intelligence}, Sense: ${profile.sense}
+                        - Stat Points Available to Distribute: ${profile.statPoints}
+                        - Treasury Gold: ${profile.gold}
+                        - Personal Bests -> Bench: ${profile.benchPress}kg, Squat: ${profile.squat}kg, Deadlift: ${profile.deadlift}kg, OHP: ${profile.overheadPress}kg
+                        
                         Here is the previous conversation history:
                         $historySerialized
 
@@ -1820,7 +1963,7 @@ class SystemViewModel(application: Application) : AndroidViewModel(application) 
                         2. "profileUpdates": Optional JSON object matching fields in UserProfileEntity: level:Int, xp:Int, strength:Int, agility:Int, vitality:Int, intelligence:Int, sense:Int, statPoints:Int, gold:Int, benchPress:Float, squat:Float, deadlift:Float, overheadPress:Float.
                         3. "newQuest": Optional JSON object for a new quest: name:String, targetCount:Int.
                         4. "newWorkoutLog": Optional JSON object for a workout log: exerciseName:String, category:String, weight:Float, sets:Int, reps:Int.
-                        Format your output STRICTLY as a clean JSON object containing only these optional fields. No additional text wrappers.
+                        Format your output STRICTLY as a clean JSON object containing only these optional fields. No additional markdown or text wrappers.
                     """.trimIndent()
 
                     val requestJson = org.json.JSONObject().apply {
@@ -1837,13 +1980,14 @@ class SystemViewModel(application: Application) : AndroidViewModel(application) 
 
                     val mediaType = "application/json; charset=utf-8".toMediaType()
                     val requestBody = requestJson.toString().toRequestBody(mediaType)
-                    val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=$apiKey"
+                    val url = "https://generativelanguage.googleapis.com/v1beta/models/${selectedAdminModel.value}:generateContent?key=$apiKey"
 
                     val request = okhttp3.Request.Builder()
                         .url(url)
                         .post(requestBody)
                         .build()
 
+                    SoloErrorLogger.info("AdminAPI", "Executing decree prompt via model: ${selectedAdminModel.value}")
                     val result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                         client.newCall(request).execute().use { response ->
                             if (!response.isSuccessful) throw Exception("HTTP ${response.code}")
@@ -1869,6 +2013,7 @@ class SystemViewModel(application: Application) : AndroidViewModel(application) 
 
                     val jsonResult = org.json.JSONObject(cleanJsonStr)
                     val explanation = jsonResult.optString("explanation", "Sovereign request executed.")
+                    SoloErrorLogger.info("AdminAPI", "Decree parsed: $explanation")
                     
                     if (jsonResult.has("profileUpdates")) {
                         val pUp = jsonResult.getJSONObject("profileUpdates")
@@ -1923,6 +2068,7 @@ class SystemViewModel(application: Application) : AndroidViewModel(application) 
                     notifyMsg(explanation, "achievement")
                 } catch (e: Exception) {
                     val errMsg = "Error processing system edit: ${e.message}"
+                    SoloErrorLogger.error("AdminAPI", "Failed to process system edit decree", e)
                     adminChatMessages.value = adminChatMessages.value + AdminChatMessage("system", errMsg)
                     notifyMsg(errMsg, "warning")
                 }

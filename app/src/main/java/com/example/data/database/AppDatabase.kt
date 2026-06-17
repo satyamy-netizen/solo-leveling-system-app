@@ -14,9 +14,10 @@ import com.example.data.model.*
         WorkoutLogEntity::class,
         BodyMeasurementEntity::class,
         BadgeEntity::class,
-        ExerciseEntity::class
+        ExerciseEntity::class,
+        AfterlifePostEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

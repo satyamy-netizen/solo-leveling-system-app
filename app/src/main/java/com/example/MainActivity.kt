@@ -55,12 +55,12 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
+            val viewModel: SystemViewModel = viewModel()
             MyApplicationTheme {
-                // Initialize main Solo Leveling system state provider
-                val viewModel: SystemViewModel = viewModel()
-                
                 Box(modifier = Modifier.fillMaxSize()) {
-                    SystemMainApp(viewModel = viewModel)
+                    com.example.ui.SystemErrorBoundary {
+                        SystemMainApp(viewModel = viewModel)
+                    }
                 }
             }
         }

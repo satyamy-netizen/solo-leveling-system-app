@@ -99,4 +99,20 @@ interface SystemDao {
 
     @Query("DELETE FROM exercise WHERE name = :name")
     suspend fun deleteExercise(name: String)
+
+    // --- Afterlife Social Feed ---
+    @Query("SELECT * FROM afterlife_post ORDER BY id DESC")
+    fun getAllAfterlifePosts(): Flow<List<AfterlifePostEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAfterlifePost(post: AfterlifePostEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAfterlifePosts(posts: List<AfterlifePostEntity>)
+
+    @Update
+    suspend fun updateAfterlifePost(post: AfterlifePostEntity)
+
+    @Query("DELETE FROM afterlife_post WHERE id = :id")
+    suspend fun deleteAfterlifePost(id: Int)
 }
